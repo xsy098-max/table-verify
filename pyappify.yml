@@ -1,0 +1,15 @@
+name: "table-verify"
+uac: false
+profiles:
+  - name: "China"
+    git_url: "https://github.com/xsy098-max/table-verify.git"
+    main_script: "table_verify.py"
+    requires_python: "3.12"
+    requirements: "requirements.txt"
+    use_pythonw: true
+    pip_args: "--index-url https://mirrors.cloud.tencent.com/pypi/simple --extra-index-url https://pypi.org/simple --timeout 300 --retries 3"
+
+  - name: "Debug"
+    git_url: "https://github.com/xsy098-max/table-verify.git"
+    main_script: "table_verify.py"
+    use_pythonw: false

@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# IDE
+.idea/
+.vscode/
+.trae/
+.claude/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Env
+.env
+
+# Logs
+logs/
+debug.log
+
+# PyAppify
+data/
+pyappify_dist/
+packages/
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# User data
+tasks/
+reports/
+
+# Design tables (user-specific, not for repo)
+*.csv
