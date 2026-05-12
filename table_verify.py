@@ -478,6 +478,7 @@ class TableVerifyApp:
         self._last_sash_h = 300
         self._last_sash_v = 400
         self._closing = False
+        self._task_snapshot = None
 
         self._build_menu()
         self._build_task_toolbar()
@@ -486,6 +487,30 @@ class TableVerifyApp:
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.root.after(500, self._track_sash_positions)
         self._new_task()
+
+    def _mark_clean(self):
+        self._collect_step_params()
+        self._task_snapshot = json.dumps(self.current_task.to_dict(), ensure_ascii=False, sort_keys=True)
+
+    def _is_dirty(self):
+        self._collect_step_params()
+        current = json.dumps(self.current_task.to_dict(), ensure_ascii=False, sort_keys=True)
+        return current != self._task_snapshot
+
+    def _check_unsaved(self):
+        if self._is_dirty():
+            result = messagebox.askyesnocancel(
+                "未保存的修改",
+                "当前任务有未保存的修改，是否保存？\n\n是：保存后继续\n否：不保存，直接继续\n取消：返回继续编辑",
+                parent=self.root
+            )
+            if result is None:
+                return False
+            if result:
+                self._save_task()
+            if not self.current_task_file:
+                return False
+        return True
 
     def _build_menu(self):
         menubar = tk.Menu(self.root)
@@ -540,6 +565,10 @@ class TableVerifyApp:
         name = self.task_var.get()
         if not name or (self.current_task.name == name and self.current_task_file):
             return
+        if not self._check_unsaved():
+            if self.current_task_file:
+                self.task_combo.set(os.path.basename(self.current_task_file).replace('.task', ''))
+            return
         tasks_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tasks')
         file_path = os.path.join(tasks_dir, f"{name}.task")
         if os.path.exists(file_path):
@@ -548,6 +577,7 @@ class TableVerifyApp:
                 self.current_task_file = file_path
                 self._refresh_all()
                 self.task_combo.set(name)
+                self._mark_clean()
                 self.status_bar.config(text=f"已加载任务: {name}")
             except Exception as e:
                 messagebox.showerror("错误", f"加载任务失败: {e}")
@@ -770,14 +800,18 @@ class TableVerifyApp:
             self.current_task_file = file_path
             self._refresh_all()
             self.task_combo.set(self.current_task.name)
+            self._mark_clean()
             self.status_bar.config(text=f"已加载任务: {self.current_task.name}")
         except Exception:
             pass
 
     def _new_task(self):
+        if self.step_widgets and not self._check_unsaved():
+            return
         self.current_task = Task(name="新任务")
         self.current_task_file = None
         self._refresh_all()
+        self._mark_clean()
 
     def _refresh_all(self):
         self._refresh_table_cache()
@@ -1063,6 +1097,7 @@ class TableVerifyApp:
         if self.current_task_file and os.path.exists(self.current_task_file):
             self.current_task.save(self.current_task_file)
             self._refresh_task_list()
+            self._mark_clean()
             self.status_bar.config(text=f"任务已保存: {self.current_task_file}")
         else:
             tasks_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tasks')
@@ -1075,6 +1110,7 @@ class TableVerifyApp:
                 self.current_task_file = file_path
                 self._refresh_task_list()
                 self.task_combo.set(self.current_task.name)
+                self._mark_clean()
                 self.status_bar.config(text=f"任务已保存: {file_path}")
 
     def _copy_task(self):
@@ -1094,6 +1130,7 @@ class TableVerifyApp:
         self.current_task = Task.from_dict(task_dict)
         self.current_task_file = file_path
         self._refresh_all()
+        self._mark_clean()
         self.status_bar.config(text=f"任务已另存为: {file_path}")
 
     def _export_report(self):
