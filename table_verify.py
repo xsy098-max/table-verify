@@ -474,6 +474,7 @@ class TableVerifyApp:
         self.last_result = None
         self.step_widgets = []
         self.table_cache = {}
+        self._widgets_group_name = None
         self._last_sash_h = 300
         self._last_sash_v = 400
         self._closing = False
@@ -902,10 +903,13 @@ class TableVerifyApp:
         for w in self.steps_inner.winfo_children():
             w.destroy()
         self.step_widgets = []
+        self._widgets_group_name = None
 
         group = self._get_current_group()
         if not group:
             return
+
+        self._widgets_group_name = group.name
 
         for idx, step in enumerate(group.steps):
             disabled = step.params.get('_disabled', False)
@@ -953,7 +957,13 @@ class TableVerifyApp:
         self._refresh_steps()
 
     def _collect_step_params(self):
-        group = self._get_current_group()
+        if not self._widgets_group_name:
+            return
+        group = None
+        for g in self.current_task.groups:
+            if g.name == self._widgets_group_name:
+                group = g
+                break
         if not group:
             return
         for idx, sw in enumerate(self.step_widgets):
