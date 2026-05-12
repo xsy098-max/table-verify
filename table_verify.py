@@ -710,9 +710,9 @@ class TableVerifyApp:
         vsb = ttk.Scrollbar(parent, orient=tk.VERTICAL, command=self.result_tree.yview)
         hsb = ttk.Scrollbar(parent, orient=tk.HORIZONTAL, command=self.result_tree.xview)
         self.result_tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
-        self.result_tree.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-        vsb.pack(side=tk.RIGHT, fill=tk.Y)
         hsb.pack(side=tk.BOTTOM, fill=tk.X)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+        self.result_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         self.result_tree.tag_configure('pass', foreground='#2e7d32')
         self.result_tree.tag_configure('fail', foreground='#c62828')
