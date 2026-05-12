@@ -613,6 +613,7 @@ class TableVerifyApp:
         ttk.Button(toolbar, text="保存", command=self._save_task, width=6).pack(side=tk.LEFT, padx=3)
         ttk.Button(toolbar, text="另存为", command=self._copy_task, width=6).pack(side=tk.LEFT, padx=3)
         ttk.Button(toolbar, text="删除", command=self._delete_task, width=6).pack(side=tk.LEFT, padx=3)
+        ttk.Button(toolbar, text="重命名", command=self._rename_task, width=6).pack(side=tk.LEFT, padx=3)
         ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=10)
         ttk.Button(toolbar, text="运行 (F5)", command=self._run_verify, width=10).pack(side=tk.LEFT, padx=3)
         ttk.Button(toolbar, text="批量运行", command=self._batch_run, width=8).pack(side=tk.LEFT, padx=3)
@@ -1353,6 +1354,32 @@ class TableVerifyApp:
             self.status_bar.config(text=f"已删除任务: {name}")
         except Exception as e:
             messagebox.showerror("错误", f"删除任务失败: {e}", parent=self.root)
+
+    def _rename_task(self):
+        if not self.current_task_file or not os.path.exists(self.current_task_file):
+            messagebox.showwarning("提示", "当前任务未保存，无法重命名", parent=self.root)
+            return
+        old_name = self.current_task.name
+        new_name = simpledialog.askstring("重命名任务", f"当前名称: {old_name}\n请输入新名称:", parent=self.root)
+        if not new_name or new_name == old_name:
+            return
+        tasks_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tasks')
+        new_path = os.path.join(tasks_dir, f"{new_name}.task")
+        if os.path.exists(new_path):
+            messagebox.showwarning("提示", f"任务 '{new_name}' 已存在", parent=self.root)
+            return
+        try:
+            self.current_task.name = new_name
+            self.current_task.save(self.current_task_file)
+            os.rename(self.current_task_file, new_path)
+            self.current_task_file = new_path
+            self._refresh_task_list()
+            self.task_combo.set(new_name)
+            self._mark_clean()
+            self.status_bar.config(text=f"已重命名: {old_name} → {new_name}")
+        except Exception as e:
+            self.current_task.name = old_name
+            messagebox.showerror("错误", f"重命名失败: {e}", parent=self.root)
 
     def _export_report(self):
         if not self.last_result:
