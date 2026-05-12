@@ -933,6 +933,7 @@ class TableVerifyApp:
         self._refresh_steps()
 
     def _copy_step(self, idx):
+        self._collect_step_params()
         group = self._get_current_group()
         if not group or idx >= len(group.steps):
             return
