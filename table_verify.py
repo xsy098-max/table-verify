@@ -639,14 +639,28 @@ class TableVerifyApp:
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
     def _bind_steps_mousewheel(self, event=None):
-        self.root.bind_all('<MouseWheel>', self._on_steps_mousewheel)
-        self.root.bind_all('<Button-4>', self._on_steps_mousewheel)
-        self.root.bind_all('<Button-5>', self._on_steps_mousewheel)
+        self._bind_mousewheel_to_children(self.steps_inner)
 
     def _unbind_steps_mousewheel(self, event=None):
-        self.root.unbind_all('<MouseWheel>')
-        self.root.unbind_all('<Button-4>')
-        self.root.unbind_all('<Button-5>')
+        self._unbind_mousewheel_from_children(self.steps_inner)
+
+    def _bind_mousewheel_to_children(self, widget):
+        if not isinstance(widget, (ttk.Combobox, tk.Listbox, ttk.Entry, tk.Entry, tk.Spinbox, ttk.Spinbox)):
+            widget.bind('<MouseWheel>', self._on_steps_mousewheel)
+            widget.bind('<Button-4>', self._on_steps_mousewheel)
+            widget.bind('<Button-5>', self._on_steps_mousewheel)
+        for child in widget.winfo_children():
+            self._bind_mousewheel_to_children(child)
+
+    def _unbind_mousewheel_from_children(self, widget):
+        try:
+            widget.unbind('<MouseWheel>')
+            widget.unbind('<Button-4>')
+            widget.unbind('<Button-5>')
+        except Exception:
+            pass
+        for child in widget.winfo_children():
+            self._unbind_mousewheel_from_children(child)
 
     def _on_steps_mousewheel(self, event):
         if event.num == 4:
@@ -939,6 +953,8 @@ class TableVerifyApp:
                 sw.configure(foreground='gray')
             sw.pack(fill=tk.X, padx=5, pady=2)
             self.step_widgets.append(sw)
+
+        self._bind_mousewheel_to_children(self.steps_inner)
 
     def _move_step(self, idx, direction):
         group = self._get_current_group()
