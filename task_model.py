@@ -1,7 +1,7 @@
 import json
 import os
 
-VERSION = "1.3.3"
+VERSION = "1.3.4"
 
 
 class DataSource:
@@ -116,13 +116,13 @@ class Task:
 
 BLOCK_TYPES = {
     'extract_value': '📥 取值',
-    'split': '✂️ 拆分',
+    'split': '✂ 拆分',
     'lookup': '🔍 查表',
     'batch_lookup': '🔎 批量查表',
     'parse_drop': '🎁 解析掉落',
     'chain_lookup': '🔗 链式查找',
-    'compare': '⚖️ 比较',
-    'item_mapping_compare': '🗺️ 道具映射比较',
+    'compare': '⚖ 比较',
+    'item_mapping_compare': '🗺 道具映射比较',
 }
 
 BLOCK_DESCRIPTIONS = {
