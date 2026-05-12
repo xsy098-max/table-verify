@@ -1,7 +1,7 @@
 import json
 import os
 
-VERSION = "1.4.0"
+VERSION = "1.4.1"
 
 
 class DataSource:
