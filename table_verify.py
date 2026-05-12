@@ -546,6 +546,7 @@ class TableVerifyApp:
         ttk.Button(toolbar, text="新建", command=self._new_task, width=6).pack(side=tk.LEFT, padx=3)
         ttk.Button(toolbar, text="保存", command=self._save_task, width=6).pack(side=tk.LEFT, padx=3)
         ttk.Button(toolbar, text="另存为", command=self._copy_task, width=6).pack(side=tk.LEFT, padx=3)
+        ttk.Button(toolbar, text="删除", command=self._delete_task, width=6).pack(side=tk.LEFT, padx=3)
         ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=10)
         ttk.Button(toolbar, text="运行 (F5)", command=self._run_verify, width=10).pack(side=tk.LEFT, padx=3)
         ttk.Button(toolbar, text="导出报告", command=self._export_report, width=8).pack(side=tk.LEFT, padx=3)
@@ -1135,6 +1136,23 @@ class TableVerifyApp:
         self._refresh_all()
         self._mark_clean()
         self.status_bar.config(text=f"任务已另存为: {file_path}")
+
+    def _delete_task(self):
+        if not self.current_task_file or not os.path.exists(self.current_task_file):
+            messagebox.showwarning("提示", "当前任务未保存，无法删除", parent=self.root)
+            return
+        name = self.current_task.name
+        if not messagebox.askyesno("确认删除", f"确定要删除任务 '{name}' 吗？\n\n此操作不可撤销！", parent=self.root):
+            return
+        try:
+            os.remove(self.current_task_file)
+            self.current_task = Task(name="新任务")
+            self.current_task_file = None
+            self._refresh_all()
+            self._mark_clean()
+            self.status_bar.config(text=f"已删除任务: {name}")
+        except Exception as e:
+            messagebox.showerror("错误", f"删除任务失败: {e}", parent=self.root)
 
     def _export_report(self):
         if not self.last_result:
