@@ -195,9 +195,9 @@ class DataPreviewDialog(tk.Toplevel):
         vsb = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=tree.yview)
         tree.configure(xscrollcommand=hsb.set, yscrollcommand=vsb.set)
 
-        tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        vsb.pack(side=tk.RIGHT, fill=tk.Y)
         hsb.pack(side=tk.BOTTOM, fill=tk.X)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+        tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
 
 class StepWidget(ttk.LabelFrame):
@@ -1124,19 +1124,51 @@ class TableVerifyApp:
     def _validate_before_run(self):
         self._collect_step_params()
         errors = []
-        group = self._get_current_group()
-        if not group:
-            return ["没有选择验证组"]
-        if not group.steps:
-            return ["验证组中没有步骤"]
-        for idx, step in enumerate(group.steps):
-            if step.params.get('_disabled', False):
+        if not self.current_task.groups:
+            return ["没有验证组"]
+        for group in self.current_task.groups:
+            if not group.steps:
+                errors.append(f"验证组 '{group.name}' 中没有步骤")
                 continue
-            sw = self.step_widgets[idx] if idx < len(self.step_widgets) else None
-            if sw:
-                step_errors = sw.validate()
+            for idx, step in enumerate(group.steps):
+                if step.params.get('_disabled', False):
+                    continue
+                sw_idx = -1
+                if group.name == self._widgets_group_name:
+                    active_idx = 0
+                    for si, s in enumerate(group.steps):
+                        if not s.params.get('_disabled', False):
+                            if active_idx < len(self.step_widgets):
+                                sw = self.step_widgets[active_idx]
+                                sw_idx = si
+                            active_idx += 1
+                    sw = None
+                else:
+                    sw = None
+                step_errors = []
+                for pdef in BLOCK_PARAMS.get(step.block_type, []):
+                    key = pdef['key']
+                    ptype = pdef['type']
+                    condition = pdef.get('condition', None)
+                    optional = pdef.get('optional', False)
+                    if optional:
+                        continue
+                    current_mode = step.params.get('mode', '')
+                    if not current_mode:
+                        for p in BLOCK_PARAMS.get(step.block_type, []):
+                            if p['key'] == 'mode' and p['type'] == 'choice':
+                                current_mode = p.get('choices', [''])[0]
+                                break
+                    if condition:
+                        cond_key, cond_val = condition.split('==')
+                        check_val = current_mode if cond_key.strip() == 'mode' else step.params.get(cond_key.strip(), '')
+                        if str(check_val).strip() != cond_val.strip():
+                            continue
+                    val = step.params.get(key, '')
+                    if ptype in ('datasource', 'variable', 'column', 'text') and not str(val).strip():
+                        step_errors.append(f"{pdef['label']} 未填写")
                 for err in step_errors:
-                    errors.append(f"步骤{idx + 1}: {err}")
+                    errors.append(f"[{group.name}] 步骤{idx + 1}: {err}")
         return errors
 
     def _run_verify(self):
@@ -1155,7 +1187,13 @@ class TableVerifyApp:
                     g.steps = [s for s in g.steps if not s.params.get('_disabled', False)]
                     for s in g.steps:
                         s.params.pop('_disabled', None)
-                result = self.runner.run(filtered_task)
+                self.runner.tables = {}
+                for ds in filtered_task.data_sources:
+                    try:
+                        self.runner.tables[ds.name] = self._load_table_cached(ds)
+                    except Exception:
+                        pass
+                result = self.runner.run(filtered_task, skip_load=True)
                 self.last_result = [result]
                 self.root.after(0, lambda: self._show_results([result]))
             except Exception as e:
@@ -1194,12 +1232,13 @@ class TableVerifyApp:
                         for s in g.steps:
                             s.params.pop('_disabled', None)
                     runner = Runner()
+                    runner.tables = {}
                     for ds in task.data_sources:
                         try:
                             runner.tables[ds.name] = self._load_table_cached(ds)
                         except Exception:
                             pass
-                    result = runner.run(task)
+                    result = runner.run(task, skip_load=True)
                     all_results.append(result)
                 except Exception as e:
                     r = RunResult(name)

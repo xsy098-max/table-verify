@@ -115,15 +115,16 @@ class Runner:
                 errors.append(f"加载数据源 '{ds.name}' 失败: {e}")
         return errors
 
-    def run(self, task):
-        errors = self.load_tables(task.data_sources)
-        if errors:
-            result = RunResult(task.name)
-            for err in errors:
-                gr = GroupResult("加载错误")
-                gr.error = err
-                result.group_results.append(gr)
-            return result
+    def run(self, task, skip_load=False):
+        if not skip_load:
+            errors = self.load_tables(task.data_sources)
+            if errors:
+                result = RunResult(task.name)
+                for err in errors:
+                    gr = GroupResult("加载错误")
+                    gr.error = err
+                    result.group_results.append(gr)
+                return result
 
         result = RunResult(task.name)
 
