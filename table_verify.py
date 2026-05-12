@@ -526,7 +526,7 @@ class StepWidget(ttk.LabelFrame):
 
 
 class TableVerifyApp:
-    _BASE_DIR = os.path.dirname(os.path.abspath(sys.executable if getattr(sys, 'frozen', False) else __file__))
+    _BASE_DIR = os.getcwd()
     SETTINGS_FILE = os.path.join(_BASE_DIR, 'settings.json')
 
     def __init__(self, root):
@@ -641,7 +641,7 @@ class TableVerifyApp:
         self._refresh_task_list()
 
     def _refresh_task_list(self):
-        tasks_dir = os.path.join(self._BASE_DIR, 'tasks')
+        tasks_dir = os.path.join(self._BASE_DIR, 'Tasks')
         os.makedirs(tasks_dir, exist_ok=True)
         task_files = [f[:-5] for f in os.listdir(tasks_dir) if f.endswith('.task')]
         self.task_combo['values'] = task_files
@@ -658,7 +658,7 @@ class TableVerifyApp:
             if self.current_task_file:
                 self.task_combo.set(os.path.basename(self.current_task_file).replace('.task', ''))
             return
-        tasks_dir = os.path.join(self._BASE_DIR, 'tasks')
+        tasks_dir = os.path.join(self._BASE_DIR, 'Tasks')
         file_path = os.path.join(tasks_dir, f"{name}.task")
         if os.path.exists(file_path):
             try:
@@ -898,7 +898,7 @@ class TableVerifyApp:
             self.root.after(200, self._apply_sash_positions)
             last_task = settings.get('last_task', '')
             if last_task:
-                tasks_dir = os.path.join(self._BASE_DIR, 'tasks')
+                tasks_dir = os.path.join(self._BASE_DIR, 'Tasks')
                 task_path = os.path.join(tasks_dir, last_task)
                 if os.path.exists(task_path):
                     self.root.after(400, lambda: self._load_task_file(task_path))
@@ -1224,7 +1224,7 @@ class TableVerifyApp:
         thread.start()
 
     def _batch_run(self):
-        tasks_dir = os.path.join(self._BASE_DIR, 'tasks')
+        tasks_dir = os.path.join(self._BASE_DIR, 'Tasks')
         os.makedirs(tasks_dir, exist_ok=True)
         task_files = [f[:-5] for f in os.listdir(tasks_dir) if f.endswith('.task')]
         if not task_files:
@@ -1325,7 +1325,7 @@ class TableVerifyApp:
             self._mark_clean()
             self.status_bar.config(text=f"任务已保存: {self.current_task_file}")
         else:
-            tasks_dir = os.path.join(self._BASE_DIR, 'tasks')
+            tasks_dir = os.path.join(self._BASE_DIR, 'Tasks')
             os.makedirs(tasks_dir, exist_ok=True)
             file_path = filedialog.asksaveasfilename(
                 initialdir=tasks_dir, defaultextension=".task",
@@ -1345,7 +1345,7 @@ class TableVerifyApp:
             return
         task_dict = self.current_task.to_dict()
         task_dict['task_name'] = new_name
-        tasks_dir = os.path.join(self._BASE_DIR, 'tasks')
+        tasks_dir = os.path.join(self._BASE_DIR, 'Tasks')
         os.makedirs(tasks_dir, exist_ok=True)
         file_path = os.path.join(tasks_dir, f"{new_name}.task")
         if os.path.exists(file_path) and not messagebox.askyesno("确认", f"任务 '{new_name}' 已存在，是否覆盖？"):
@@ -1383,7 +1383,7 @@ class TableVerifyApp:
         new_name = simpledialog.askstring("重命名任务", f"当前名称: {old_name}\n请输入新名称:", parent=self.root)
         if not new_name or new_name == old_name:
             return
-        tasks_dir = os.path.join(self._BASE_DIR, 'tasks')
+        tasks_dir = os.path.join(self._BASE_DIR, 'Tasks')
         new_path = os.path.join(tasks_dir, f"{new_name}.task")
         if os.path.exists(new_path):
             messagebox.showwarning("提示", f"任务 '{new_name}' 已存在", parent=self.root)
