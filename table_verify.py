@@ -474,12 +474,16 @@ class TableVerifyApp:
         self.last_result = None
         self.step_widgets = []
         self.table_cache = {}
+        self._last_sash_h = 300
+        self._last_sash_v = 400
+        self._closing = False
 
         self._build_menu()
         self._build_task_toolbar()
         self._build_ui()
         self._restore_window_state()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+        self.root.after(500, self._track_sash_positions)
         self._new_task()
 
     def _build_menu(self):
@@ -551,23 +555,23 @@ class TableVerifyApp:
         main_area = ttk.Frame(self.root)
         main_area.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=2, pady=(0, 2))
 
-        self.paned_h = ttk.PanedWindow(main_area, orient=tk.HORIZONTAL)
+        self.paned_h = tk.PanedWindow(main_area, orient=tk.HORIZONTAL, sashwidth=4, bg='#d0d0d0')
         self.paned_h.pack(fill=tk.BOTH, expand=True)
 
         left_frame = ttk.LabelFrame(self.paned_h, text="数据源管理")
-        self.paned_h.add(left_frame, weight=1)
+        self.paned_h.add(left_frame, minsize=100)
         right_frame = ttk.Frame(self.paned_h)
-        self.paned_h.add(right_frame, weight=4)
+        self.paned_h.add(right_frame, minsize=400)
 
         self._build_datasource_panel(left_frame)
 
-        self.paned_v = ttk.PanedWindow(right_frame, orient=tk.VERTICAL)
+        self.paned_v = tk.PanedWindow(right_frame, orient=tk.VERTICAL, sashwidth=4, bg='#d0d0d0')
         self.paned_v.pack(fill=tk.BOTH, expand=True)
         steps_frame = ttk.LabelFrame(self.paned_v, text="验证步骤")
-        self.paned_v.add(steps_frame, weight=3)
+        self.paned_v.add(steps_frame, minsize=100)
         self._build_steps_panel(steps_frame)
         results_frame = ttk.LabelFrame(self.paned_v, text="运行结果")
-        self.paned_v.add(results_frame, weight=2)
+        self.paned_v.add(results_frame, minsize=100)
         self._build_results_panel(results_frame)
 
         self.status_bar = ttk.Label(self.root, text="就绪", relief=tk.SUNKEN, anchor=tk.W, padding=(5, 2))
@@ -678,18 +682,34 @@ class TableVerifyApp:
                 pass
 
     def _on_close(self):
+        self._closing = True
+        self._collect_step_params()
         self._save_window_state()
         self.root.destroy()
+
+    def _track_sash_positions(self):
+        if self._closing:
+            return
+        try:
+            pos_h = self.paned_h.sashpos(0)
+            pos_v = self.paned_v.sashpos(0)
+            if pos_h > 50:
+                self._last_sash_h = pos_h
+            if pos_v > 50:
+                self._last_sash_v = pos_v
+        except Exception:
+            pass
+        self.root.after(500, self._track_sash_positions)
 
     def _save_window_state(self):
         try:
             geo = self.root.geometry()
-            paned_h_pos = self.paned_h.tk.call(self.paned_h._w, 'sashpos', 0)
-            paned_v_pos = self.paned_v.tk.call(self.paned_v._w, 'sashpos', 0)
+            last_task = os.path.basename(self.current_task_file) if self.current_task_file else ''
             settings = {
                 'geometry': geo,
-                'paned_h_sash': paned_h_pos,
-                'paned_v_sash': paned_v_pos,
+                'paned_h_sash': self._last_sash_h,
+                'paned_v_sash': self._last_sash_v,
+                'last_task': last_task,
             }
             with open(self.SETTINGS_FILE, 'w', encoding='utf-8') as f:
                 json.dump(settings, f)
@@ -697,22 +717,47 @@ class TableVerifyApp:
             pass
 
     def _restore_window_state(self):
+        self.root.geometry("1280x800")
         try:
             if not os.path.exists(self.SETTINGS_FILE):
-                self.root.geometry("1280x800")
                 return
             with open(self.SETTINGS_FILE, 'r', encoding='utf-8') as f:
                 settings = json.load(f)
             geo = settings.get('geometry', '1280x800')
             self.root.geometry(geo)
-            paned_h_sash = settings.get('paned_h_sash')
-            paned_v_sash = settings.get('paned_v_sash')
-            if paned_h_sash is not None:
-                self.root.after(100, lambda: self.paned_h.tk.call(self.paned_h._w, 'sashpos', 0, paned_h_sash))
-            if paned_v_sash is not None:
-                self.root.after(100, lambda: self.paned_v.tk.call(self.paned_v._w, 'sashpos', 0, paned_v_sash))
+            self.root.update_idletasks()
+            paned_h_sash = settings.get('paned_h_sash', 0)
+            paned_v_sash = settings.get('paned_v_sash', 0)
+            if paned_h_sash > 50:
+                self._last_sash_h = paned_h_sash
+            if paned_v_sash > 50:
+                self._last_sash_v = paned_v_sash
+            self.root.after(200, self._apply_sash_positions)
+            last_task = settings.get('last_task', '')
+            if last_task:
+                tasks_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tasks')
+                task_path = os.path.join(tasks_dir, last_task)
+                if os.path.exists(task_path):
+                    self.root.after(400, lambda: self._load_task_file(task_path))
         except Exception:
-            self.root.geometry("1280x800")
+            pass
+
+    def _apply_sash_positions(self):
+        try:
+            self.paned_h.sashpos(0, self._last_sash_h)
+            self.paned_v.sashpos(0, self._last_sash_v)
+        except Exception:
+            pass
+
+    def _load_task_file(self, file_path):
+        try:
+            self.current_task = Task.load(file_path)
+            self.current_task_file = file_path
+            self._refresh_all()
+            self.task_combo.set(self.current_task.name)
+            self.status_bar.config(text=f"已加载任务: {self.current_task.name}")
+        except Exception:
+            pass
 
     def _new_task(self):
         self.current_task = Task(name="新任务")
