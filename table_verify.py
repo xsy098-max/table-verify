@@ -730,8 +730,20 @@ class TableVerifyApp:
                 pass
 
     def _on_close(self):
+        if self._is_dirty():
+            result = messagebox.askyesnocancel(
+                "未保存的修改",
+                "当前任务有未保存的修改。\n\n是：保存后关闭\n否：不保存，直接关闭\n取消：返回继续编辑",
+                parent=self.root
+            )
+            if result is None:
+                return
+            if result:
+                self._collect_step_params()
+                self._save_task()
+                if not self.current_task_file:
+                    return
         self._closing = True
-        self._collect_step_params()
         self._save_window_state()
         self.root.destroy()
 
