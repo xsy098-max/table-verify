@@ -1,7 +1,9 @@
 import json
 import os
 
-VERSION = "1.4.1"
+VERSION = "1.4.2"
+
+AUTHOR = "奈叶摩尔"
 
 
 class DataSource:

@@ -8,7 +8,7 @@ import json
 
 from task_model import (
     Task, DataSource, BlockConfig, VerifyGroup,
-    BLOCK_TYPES, BLOCK_DESCRIPTIONS, BLOCK_PARAMS, VERSION
+    BLOCK_TYPES, BLOCK_DESCRIPTIONS, BLOCK_PARAMS, VERSION, AUTHOR
 )
 from table_loader import TableLoader, TableData
 from runner import Runner, RunResult, GroupResult
@@ -531,7 +531,7 @@ class TableVerifyApp:
 
     def __init__(self, root):
         self.root = root
-        self.root.title(f"对表工具 TableVerify v{VERSION}")
+        self.root.title(f"对表工具 TableVerify v{VERSION} - by.{AUTHOR}")
         self.root.minsize(900, 600)
 
         self.current_task = Task()
@@ -595,11 +595,29 @@ class TableVerifyApp:
         run_menu.add_command(label="导出报告...", command=self._export_report)
         menubar.add_cascade(label="运行", menu=run_menu)
 
+        help_menu = tk.Menu(menubar, tearoff=0)
+        help_menu.add_command(label="关于", command=self._show_about)
+        menubar.add_cascade(label="帮助", menu=help_menu)
+
         self.root.config(menu=menubar)
         self.root.bind('<Control-n>', lambda e: self._new_task())
         self.root.bind('<Control-s>', lambda e: self._save_task())
         self.root.bind('<Control-Shift-S>', lambda e: self._copy_task())
         self.root.bind('<F5>', lambda e: self._run_verify())
+
+    def _show_about(self):
+        dlg = tk.Toplevel(self.root)
+        dlg.title("关于")
+        dlg.resizable(False, False)
+        dlg.transient(self.root)
+        dlg.grab_set()
+        frame = ttk.Frame(dlg, padding=20)
+        frame.pack()
+        ttk.Label(frame, text="对表工具 TableVerify", font=('TkDefaultFont', 14, 'bold')).pack(pady=(0, 5))
+        ttk.Label(frame, text=f"版本: v{VERSION}", font=('TkDefaultFont', 10)).pack()
+        ttk.Label(frame, text=f"作者: {AUTHOR}", font=('TkDefaultFont', 10)).pack(pady=(5, 15))
+        ttk.Button(frame, text="确定", command=dlg.destroy, width=8).pack()
+        dlg.geometry("+%d+%d" % (self.root.winfo_x() + 200, self.root.winfo_y() + 200))
 
     def _build_task_toolbar(self):
         toolbar = ttk.Frame(self.root, padding=(5, 4))
