@@ -180,6 +180,12 @@ class StepWidget(ttk.LabelFrame):
 
         param_defs = BLOCK_PARAMS.get(self.block_config.block_type, [])
         current_mode = self.block_config.params.get('mode', '')
+        if not current_mode:
+            for p in param_defs:
+                if p['key'] == 'mode' and p['type'] == 'choice':
+                    current_mode = p.get('choices', [''])[0]
+                    self.block_config.params['mode'] = current_mode
+                    break
         row = 0
 
         for pdef in param_defs:
@@ -307,7 +313,12 @@ class StepWidget(ttk.LabelFrame):
     def _on_mode_change(self, event=None):
         saved = self.collect_params()
         self.block_config.params = saved
+        canvas = self.app.steps_canvas if self.app else None
+        scroll_pos = canvas.yview()[0] if canvas else 0
         self._build_fields()
+        if canvas:
+            canvas.update_idletasks()
+            canvas.yview_moveto(scroll_pos)
 
     def _add_chain_row(self, chain_data):
         row_frame = ttk.Frame(self.chain_frame)
@@ -426,6 +437,11 @@ class StepWidget(ttk.LabelFrame):
         errors = []
         param_defs = BLOCK_PARAMS.get(self.block_config.block_type, [])
         current_mode = self.block_config.params.get('mode', '')
+        if not current_mode:
+            for p in param_defs:
+                if p['key'] == 'mode' and p['type'] == 'choice':
+                    current_mode = p.get('choices', [''])[0]
+                    break
         for pdef in param_defs:
             key = pdef['key']
             ptype = pdef['type']
@@ -445,10 +461,11 @@ class StepWidget(ttk.LabelFrame):
 
 
 class TableVerifyApp:
+    SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'settings.json')
+
     def __init__(self, root):
         self.root = root
         self.root.title(f"对表工具 TableVerify v{VERSION}")
-        self.root.geometry("1280x800")
         self.root.minsize(900, 600)
 
         self.current_task = Task()
@@ -461,6 +478,8 @@ class TableVerifyApp:
         self._build_menu()
         self._build_task_toolbar()
         self._build_ui()
+        self._restore_window_state()
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self._new_task()
 
     def _build_menu(self):
@@ -605,8 +624,32 @@ class TableVerifyApp:
         self.steps_inner.bind('<Configure>', lambda e: self.steps_canvas.configure(scrollregion=self.steps_canvas.bbox('all')))
         self.steps_canvas.bind('<Configure>', lambda e: self.steps_canvas.itemconfig(self._canvas_window, width=e.width))
 
+        self.steps_canvas.bind('<MouseWheel>', self._on_steps_mousewheel)
+        self.steps_canvas.bind('<Button-4>', self._on_steps_mousewheel)
+        self.steps_canvas.bind('<Button-5>', self._on_steps_mousewheel)
+        self.steps_canvas.bind('<Enter>', self._bind_steps_mousewheel)
+        self.steps_canvas.bind('<Leave>', self._unbind_steps_mousewheel)
+
         self.steps_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+    def _bind_steps_mousewheel(self, event=None):
+        self.root.bind_all('<MouseWheel>', self._on_steps_mousewheel)
+        self.root.bind_all('<Button-4>', self._on_steps_mousewheel)
+        self.root.bind_all('<Button-5>', self._on_steps_mousewheel)
+
+    def _unbind_steps_mousewheel(self, event=None):
+        self.root.unbind_all('<MouseWheel>')
+        self.root.unbind_all('<Button-4>')
+        self.root.unbind_all('<Button-5>')
+
+    def _on_steps_mousewheel(self, event):
+        if event.num == 4:
+            self.steps_canvas.yview_scroll(-3, 'units')
+        elif event.num == 5:
+            self.steps_canvas.yview_scroll(3, 'units')
+        else:
+            self.steps_canvas.yview_scroll(int(-1 * (event.delta / 120)), 'units')
 
     def _build_results_panel(self, parent):
         cols = ('label', 'item_name', 'expected', 'actual', 'result', 'message')
@@ -633,6 +676,43 @@ class TableVerifyApp:
                 self.table_cache[ds.name] = table
             except Exception:
                 pass
+
+    def _on_close(self):
+        self._save_window_state()
+        self.root.destroy()
+
+    def _save_window_state(self):
+        try:
+            geo = self.root.geometry()
+            paned_h_pos = self.paned_h.tk.call(self.paned_h._w, 'sashpos', 0)
+            paned_v_pos = self.paned_v.tk.call(self.paned_v._w, 'sashpos', 0)
+            settings = {
+                'geometry': geo,
+                'paned_h_sash': paned_h_pos,
+                'paned_v_sash': paned_v_pos,
+            }
+            with open(self.SETTINGS_FILE, 'w', encoding='utf-8') as f:
+                json.dump(settings, f)
+        except Exception:
+            pass
+
+    def _restore_window_state(self):
+        try:
+            if not os.path.exists(self.SETTINGS_FILE):
+                self.root.geometry("1280x800")
+                return
+            with open(self.SETTINGS_FILE, 'r', encoding='utf-8') as f:
+                settings = json.load(f)
+            geo = settings.get('geometry', '1280x800')
+            self.root.geometry(geo)
+            paned_h_sash = settings.get('paned_h_sash')
+            paned_v_sash = settings.get('paned_v_sash')
+            if paned_h_sash is not None:
+                self.root.after(100, lambda: self.paned_h.tk.call(self.paned_h._w, 'sashpos', 0, paned_h_sash))
+            if paned_v_sash is not None:
+                self.root.after(100, lambda: self.paned_v.tk.call(self.paned_v._w, 'sashpos', 0, paned_v_sash))
+        except Exception:
+            self.root.geometry("1280x800")
 
     def _new_task(self):
         self.current_task = Task(name="新任务")
@@ -773,6 +853,7 @@ class TableVerifyApp:
         self._refresh_steps()
 
     def _refresh_steps(self):
+        self._collect_step_params()
         for w in self.steps_inner.winfo_children():
             w.destroy()
         self.step_widgets = []
@@ -798,8 +879,8 @@ class TableVerifyApp:
 
             btn_frame = ttk.Frame(header)
             btn_frame.pack(side=tk.RIGHT, padx=5)
-            ttk.Button(btn_frame, text="复制", width=3, command=lambda i=idx: self._copy_step(i)).pack(side=tk.LEFT, padx=1)
-            ttk.Button(btn_frame, text="禁用" if not disabled else "启用", width=3, command=lambda i=idx: self._toggle_step(i)).pack(side=tk.LEFT, padx=1)
+            ttk.Button(btn_frame, text="复制", command=lambda i=idx: self._copy_step(i)).pack(side=tk.LEFT, padx=1)
+            ttk.Button(btn_frame, text="禁用" if not disabled else "启用", command=lambda i=idx: self._toggle_step(i)).pack(side=tk.LEFT, padx=1)
             ttk.Button(btn_frame, text="▲", width=2, command=lambda i=idx: self._move_step(i, -1)).pack(side=tk.LEFT, padx=1)
             ttk.Button(btn_frame, text="▼", width=2, command=lambda i=idx: self._move_step(i, 1)).pack(side=tk.LEFT, padx=1)
             ttk.Button(btn_frame, text="✕", width=2, command=lambda i=idx: self._remove_step(i)).pack(side=tk.LEFT, padx=1)
