@@ -10,7 +10,71 @@ from task_model import (
     BLOCK_TYPES, BLOCK_DESCRIPTIONS, BLOCK_PARAMS, VERSION
 )
 from table_loader import TableLoader, TableData
-from runner import Runner, RunResult
+from runner import Runner, RunResult, GroupResult
+
+
+class BatchRunDialog(tk.Toplevel):
+    def __init__(self, parent, task_names):
+        super().__init__(parent)
+        self.title("批量运行")
+        self.geometry("400x450")
+        self.resizable(True, True)
+        self.result = None
+        self.transient(parent)
+        self.grab_set()
+
+        main = ttk.Frame(self, padding=15)
+        main.pack(fill=tk.BOTH, expand=True)
+
+        self.select_all_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(main, text="全选 / 全不选", variable=self.select_all_var,
+                         command=self._toggle_all).pack(anchor=tk.W, pady=(0, 10))
+
+        list_frame = ttk.Frame(main)
+        list_frame.pack(fill=tk.BOTH, expand=True)
+
+        self.canvas = tk.Canvas(list_frame, highlightthickness=0)
+        sb = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.canvas.yview)
+        self.inner = ttk.Frame(self.canvas)
+        self.canvas.configure(yscrollcommand=sb.set)
+        self.canvas.create_window((0, 0), window=self.inner, anchor=tk.NW)
+        self.inner.bind('<Configure>', lambda e: self.canvas.configure(scrollregion=self.canvas.bbox('all')))
+        self.canvas.bind('<Configure>', lambda e: self.canvas.itemconfig(1, width=e.width))
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        sb.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.task_vars = []
+        for name in task_names:
+            var = tk.BooleanVar(value=True)
+            self.task_vars.append((name, var))
+            ttk.Checkbutton(self.inner, text=name, variable=var).pack(anchor=tk.W, pady=2)
+
+        self.count_label = ttk.Label(main, text=f"已选择 {len(task_names)} 个任务", foreground='gray')
+        self.count_label.pack(anchor=tk.W, pady=(10, 0))
+        for _, var in self.task_vars:
+            var.trace_add('write', lambda *a: self._update_count())
+
+        btn_frame = ttk.Frame(main)
+        btn_frame.pack(pady=(15, 0))
+        ttk.Button(btn_frame, text="运行选中", command=self._ok, width=12).pack(side=tk.LEFT, padx=10)
+        ttk.Button(btn_frame, text="取消", command=self.destroy, width=10).pack(side=tk.LEFT, padx=10)
+
+    def _toggle_all(self):
+        val = self.select_all_var.get()
+        for _, var in self.task_vars:
+            var.set(val)
+
+    def _update_count(self):
+        count = sum(1 for _, v in self.task_vars if v.get())
+        self.count_label.config(text=f"已选择 {count} 个任务")
+
+    def _ok(self):
+        selected = [name for name, var in self.task_vars if var.get()]
+        if not selected:
+            messagebox.showwarning("提示", "请至少选择一个任务", parent=self)
+            return
+        self.result = selected
+        self.destroy()
 
 
 class DataSourceDialog(tk.Toplevel):
@@ -474,6 +538,7 @@ class TableVerifyApp:
         self.last_result = None
         self.step_widgets = []
         self.table_cache = {}
+        self._file_cache = {}
         self._widgets_group_name = None
         self._last_sash_h = 300
         self._last_sash_v = 400
@@ -524,6 +589,7 @@ class TableVerifyApp:
 
         run_menu = tk.Menu(menubar, tearoff=0)
         run_menu.add_command(label="运行验证", command=self._run_verify, accelerator="F5")
+        run_menu.add_command(label="批量运行...", command=self._batch_run)
         run_menu.add_command(label="导出报告...", command=self._export_report)
         menubar.add_cascade(label="运行", menu=run_menu)
 
@@ -549,6 +615,7 @@ class TableVerifyApp:
         ttk.Button(toolbar, text="删除", command=self._delete_task, width=6).pack(side=tk.LEFT, padx=3)
         ttk.Separator(toolbar, orient=tk.VERTICAL).pack(side=tk.LEFT, fill=tk.Y, padx=10)
         ttk.Button(toolbar, text="运行 (F5)", command=self._run_verify, width=10).pack(side=tk.LEFT, padx=3)
+        ttk.Button(toolbar, text="批量运行", command=self._batch_run, width=8).pack(side=tk.LEFT, padx=3)
         ttk.Button(toolbar, text="导出报告", command=self._export_report, width=8).pack(side=tk.LEFT, padx=3)
         self._refresh_task_list()
 
@@ -574,6 +641,8 @@ class TableVerifyApp:
         file_path = os.path.join(tasks_dir, f"{name}.task")
         if os.path.exists(file_path):
             try:
+                self.status_bar.config(text=f"正在加载: {name}...")
+                self.root.update()
                 self.current_task = Task.load(file_path)
                 self.current_task_file = file_path
                 self._refresh_all()
@@ -719,15 +788,28 @@ class TableVerifyApp:
         self.result_tree.tag_configure('fail', foreground='#c62828')
         self.result_tree.tag_configure('skip', foreground='#9e9e9e')
         self.result_tree.tag_configure('group_header', background='#e3f2fd', font=('TkDefaultFont', 10, 'bold'))
+        self.result_tree.tag_configure('task_header', background='#c8e6c9', font=('TkDefaultFont', 10, 'bold'))
 
     def _refresh_table_cache(self):
         self.table_cache.clear()
         for ds in self.current_task.data_sources:
             try:
-                table = TableLoader.load(name=ds.name, file_path=ds.file_path, sheet_name=ds.sheet_name, header_row=ds.header_row)
-                self.table_cache[ds.name] = table
+                self.table_cache[ds.name] = self._load_table_cached(ds)
             except Exception:
                 pass
+
+    def _load_table_cached(self, ds):
+        cache_key = f"{ds.file_path}|{ds.sheet_name}|{ds.header_row}"
+        try:
+            mtime = str(os.path.getmtime(ds.file_path))
+        except Exception:
+            mtime = ''
+        cached = self._file_cache.get(cache_key)
+        if cached and cached[0] == mtime:
+            return cached[1]
+        table = TableLoader.load(name=ds.name, file_path=ds.file_path, sheet_name=ds.sheet_name, header_row=ds.header_row)
+        self._file_cache[cache_key] = (mtime, table)
+        return table
 
     def _on_close(self):
         if self._is_dirty():
@@ -811,6 +893,9 @@ class TableVerifyApp:
 
     def _load_task_file(self, file_path):
         try:
+            name = os.path.basename(file_path).replace('.task', '')
+            self.status_bar.config(text=f"正在加载: {name}...")
+            self.root.update()
             self.current_task = Task.load(file_path)
             self.current_task_file = file_path
             self._refresh_all()
@@ -1071,35 +1156,99 @@ class TableVerifyApp:
                     for s in g.steps:
                         s.params.pop('_disabled', None)
                 result = self.runner.run(filtered_task)
-                self.last_result = result
-                self.root.after(0, lambda: self._show_results(result))
+                self.last_result = [result]
+                self.root.after(0, lambda: self._show_results([result]))
             except Exception as e:
                 self.root.after(0, lambda: self.status_bar.config(text=f"运行错误: {e}"))
 
         thread = threading.Thread(target=run, daemon=True)
         thread.start()
 
-    def _show_results(self, result):
-        self._clear_results()
-        for gr in result.group_results:
-            group_id = self.result_tree.insert('', tk.END, values=(f"[{gr.group_name}]", '', '', '', '', ''), tags=('group_header',))
-            if gr.error:
-                self.result_tree.insert(group_id, tk.END, values=('', '', '', '错误', gr.error, ''), tags=('fail',))
-                continue
-            for d in gr.details:
-                tag = 'skip' if d.skipped else ('pass' if d.passed else 'fail')
-                status = '跳过' if d.skipped else ('通过' if d.passed else '失败')
-                self.result_tree.insert(group_id, tk.END, values=(
-                    d.label, d.item_name or '',
-                    str(d.expected) if d.expected is not None else '',
-                    str(d.actual) if d.actual is not None else '',
-                    status, d.message,
-                ), tags=(tag,))
+    def _batch_run(self):
+        tasks_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tasks')
+        os.makedirs(tasks_dir, exist_ok=True)
+        task_files = [f[:-5] for f in os.listdir(tasks_dir) if f.endswith('.task')]
+        if not task_files:
+            messagebox.showwarning("提示", "没有已保存的任务可供运行", parent=self.root)
+            return
 
-        tp, tf, ts = result.total_passed, result.total_failed, result.total_skipped
-        status = f"完成! 通过:{tp} 失败:{tf} 跳过:{ts}"
-        if tf > 0:
-            status += f"  存在{tf}个差异"
+        dlg = BatchRunDialog(self.root, task_files)
+        self.root.wait_window(dlg)
+        if not dlg.result:
+            return
+
+        selected_names = dlg.result
+        self.status_bar.config(text=f"正在批量运行 (0/{len(selected_names)})...")
+        self.root.update()
+
+        def run():
+            all_results = []
+            for i, name in enumerate(selected_names):
+                try:
+                    self.root.after(0, lambda n=name, idx=i: self.status_bar.config(
+                        text=f"正在批量运行 ({idx + 1}/{len(selected_names)}): {n}..."))
+                    task_path = os.path.join(tasks_dir, f"{name}.task")
+                    task = Task.load(task_path)
+                    for g in task.groups:
+                        g.steps = [s for s in g.steps if not s.params.get('_disabled', False)]
+                        for s in g.steps:
+                            s.params.pop('_disabled', None)
+                    runner = Runner()
+                    for ds in task.data_sources:
+                        try:
+                            runner.tables[ds.name] = self._load_table_cached(ds)
+                        except Exception:
+                            pass
+                    result = runner.run(task)
+                    all_results.append(result)
+                except Exception as e:
+                    r = RunResult(name)
+                    gr = GroupResult("加载错误")
+                    gr.error = str(e)
+                    r.group_results.append(gr)
+                    all_results.append(r)
+
+            self.last_result = all_results
+            self.root.after(0, lambda: self._show_results(all_results))
+
+        thread = threading.Thread(target=run, daemon=True)
+        thread.start()
+
+    def _show_results(self, results):
+        self._clear_results()
+        if not isinstance(results, list):
+            results = [results]
+        total_p, total_f, total_s = 0, 0, 0
+        for result in results:
+            tp, tf, ts = result.total_passed, result.total_failed, result.total_skipped
+            total_p += tp
+            total_f += tf
+            total_s += ts
+            summary = f"通过:{tp} 失败:{tf} 跳过:{ts}"
+            task_id = self.result_tree.insert('', tk.END,
+                values=(f"[任务: {result.task_name}]", '', '', '', summary, ''),
+                tags=('task_header',))
+            for gr in result.group_results:
+                group_id = self.result_tree.insert(task_id, tk.END,
+                    values=(f"[{gr.group_name}]", '', '', '', '', ''),
+                    tags=('group_header',))
+                if gr.error:
+                    self.result_tree.insert(group_id, tk.END,
+                        values=('', '', '', '错误', gr.error, ''), tags=('fail',))
+                    continue
+                for d in gr.details:
+                    tag = 'skip' if d.skipped else ('pass' if d.passed else 'fail')
+                    status = '跳过' if d.skipped else ('通过' if d.passed else '失败')
+                    self.result_tree.insert(group_id, tk.END, values=(
+                        d.label, d.item_name or '',
+                        str(d.expected) if d.expected is not None else '',
+                        str(d.actual) if d.actual is not None else '',
+                        status, d.message,
+                    ), tags=(tag,))
+
+        status = f"完成! 共{len(results)}个任务 通过:{total_p} 失败:{total_f} 跳过:{total_s}"
+        if total_f > 0:
+            status += f"  存在{total_f}个差异"
         else:
             status += "  全部通过"
         self.status_bar.config(text=status)
@@ -1187,39 +1336,43 @@ class TableVerifyApp:
         from openpyxl import Workbook
         from openpyxl.styles import Font, PatternFill, Alignment
 
+        results = self.last_result if isinstance(self.last_result, list) else [self.last_result]
+
         wb = Workbook()
         first = True
-        for gr in self.last_result.group_results:
-            ws = wb.active if first else wb.create_sheet()
-            ws.title = gr.group_name[:31]
-            first = False
+        for result in results:
+            for gr in result.group_results:
+                ws = wb.active if first else wb.create_sheet()
+                sheet_name = f"{result.task_name}_{gr.group_name}" if len(results) > 1 else gr.group_name
+                ws.title = sheet_name[:31]
+                first = False
 
-            headers = ['标签', '道具', '期望值', '实际值', '结果', '说明']
-            ws.append(headers)
-            for col_idx, h in enumerate(headers, 1):
-                cell = ws.cell(row=1, column=col_idx)
-                cell.font = Font(bold=True, color="FFFFFF")
-                cell.fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
-                cell.alignment = Alignment(horizontal='center')
+                headers = ['标签', '道具', '期望值', '实际值', '结果', '说明']
+                ws.append(headers)
+                for col_idx, h in enumerate(headers, 1):
+                    cell = ws.cell(row=1, column=col_idx)
+                    cell.font = Font(bold=True, color="FFFFFF")
+                    cell.fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+                    cell.alignment = Alignment(horizontal='center')
 
-            pass_fill = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
-            fail_fill = PatternFill(start_color="FCE4EC", end_color="FCE4EC", fill_type="solid")
-            skip_fill = PatternFill(start_color="F5F5F5", end_color="F5F5F5", fill_type="solid")
+                pass_fill = PatternFill(start_color="E2EFDA", end_color="E2EFDA", fill_type="solid")
+                fail_fill = PatternFill(start_color="FCE4EC", end_color="FCE4EC", fill_type="solid")
+                skip_fill = PatternFill(start_color="F5F5F5", end_color="F5F5F5", fill_type="solid")
 
-            if gr.error:
-                ws.append(['错误', '', '', '', '失败', gr.error])
-                continue
+                if gr.error:
+                    ws.append(['错误', '', '', '', '失败', gr.error])
+                    continue
 
-            for d in gr.details:
-                status = '跳过' if d.skipped else ('通过' if d.passed else '失败')
-                ws.append([d.label, d.item_name or '', str(d.expected) if d.expected is not None else '', str(d.actual) if d.actual is not None else '', status, d.message])
-                fill = skip_fill if d.skipped else (pass_fill if d.passed else fail_fill)
-                for col in range(1, 7):
-                    ws.cell(row=ws.max_row, column=col).fill = fill
+                for d in gr.details:
+                    status = '跳过' if d.skipped else ('通过' if d.passed else '失败')
+                    ws.append([d.label, d.item_name or '', str(d.expected) if d.expected is not None else '', str(d.actual) if d.actual is not None else '', status, d.message])
+                    fill = skip_fill if d.skipped else (pass_fill if d.passed else fail_fill)
+                    for col in range(1, 7):
+                        ws.cell(row=ws.max_row, column=col).fill = fill
 
-            for col in ws.columns:
-                max_len = max(len(str(cell.value or '')) for cell in col)
-                ws.column_dimensions[col[0].column_letter].width = min(max_len + 4, 40)
+                for col in ws.columns:
+                    max_len = max(len(str(cell.value or '')) for cell in col)
+                    ws.column_dimensions[col[0].column_letter].width = min(max_len + 4, 40)
 
         wb.save(file_path)
 
