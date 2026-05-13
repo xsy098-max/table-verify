@@ -942,10 +942,19 @@ class TableVerifyApp:
         name = simpledialog.askstring("新建任务", "请输入任务名称:", parent=self.root)
         if not name:
             name = "新任务"
+        tasks_dir = os.path.join(self._BASE_DIR, 'Tasks')
+        os.makedirs(tasks_dir, exist_ok=True)
+        task_path = os.path.join(tasks_dir, f"{name}.task")
+        if os.path.exists(task_path):
+            messagebox.showwarning("提示", f"任务 '{name}' 已存在", parent=self.root)
+            return
         self.current_task = Task(name=name)
-        self.current_task_file = None
+        self.current_task_file = task_path
+        self.current_task.save(self.current_task_file)
         self._refresh_all()
+        self.task_combo.set(name)
         self._mark_clean()
+        self.status_bar.config(text=f"已创建任务: {name}")
 
     def _refresh_all(self):
         self._refresh_table_cache()
