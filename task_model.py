@@ -1,7 +1,7 @@
 import json
 import os
 
-VERSION = "2.3.2"
+VERSION = "2.4.0"
 
 AUTHOR = "奈叶摩尔"
 
@@ -119,6 +119,7 @@ class Task:
 BLOCK_TYPES = {
     'extract_value': '📥 取值',
     'extract_grouped': '📊 分组取值',
+    'grouped_verify': '✅ 分组对表验证',
     'split': '✂ 拆分',
     'flat_split': '📋 展平拆分',
     'lookup': '🔍 查表',
@@ -132,6 +133,7 @@ BLOCK_TYPES = {
 BLOCK_DESCRIPTIONS = {
     'extract_value': '从表中取出一个值或一组值',
     'extract_grouped': '按条件分组取多行多列值(去重)',
+    'grouped_verify': '按分组列查配置表→拆分ID→查地图名→和设计表比较',
     'split': '按分隔符拆分一个值为数组',
     'flat_split': '按多级分隔符展平拆分(如5_7|8_9→[5,7,8,9])',
     'lookup': '用一个值去另一张表查找对应字段',
@@ -158,6 +160,21 @@ BLOCK_PARAMS = {
         {'key': 'find_values_var', 'label': '分组值变量', 'type': 'variable'},
         {'key': 'return_columns', 'label': '返回列', 'type': 'multi_column'},
         {'key': 'output_var', 'label': '保存为', 'type': 'text'},
+    ],
+    'grouped_verify': [
+        {'key': 'design_source', 'label': '设计表', 'type': 'datasource'},
+        {'key': 'group_column', 'label': '段位列', 'type': 'column'},
+        {'key': 'map_columns', 'label': '地图列', 'type': 'multi_column'},
+        {'key': 'mode_column', 'label': '模式列(可选)', 'type': 'column'},
+
+        {'key': 'config_source', 'label': '配置表', 'type': 'datasource'},
+        {'key': 'config_find_column', 'label': '配置表-段位列', 'type': 'column'},
+        {'key': 'config_return_column', 'label': '配置表-地图类型字段', 'type': 'column'},
+        {'key': 'split_delimiters', 'label': '拆分分隔符', 'type': 'text'},
+
+        {'key': 'map_source', 'label': '地图表', 'type': 'datasource'},
+        {'key': 'map_find_column', 'label': '地图表-ID列', 'type': 'column'},
+        {'key': 'map_return_column', 'label': '地图表-名称列', 'type': 'column'},
     ],
     'split': [
         {'key': 'input_var', 'label': '输入变量', 'type': 'variable'},

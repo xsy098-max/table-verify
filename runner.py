@@ -143,6 +143,16 @@ class Runner:
                     if isinstance(block_result, list) and block_result and isinstance(block_result[0], CompareDetail):
                         gr.details.extend(block_result)
 
+                    if isinstance(block_result, list) and block_result and isinstance(block_result[0], dict):
+                        for item in block_result:
+                            gr.details.append(CompareDetail(
+                                label=str(item.get('label', '')),
+                                field=str(item.get('mode', '')),
+                                expected=str(item.get('expected', '')),
+                                actual=str(item.get('actual', '')),
+                                passed=item.get('pass', False),
+                            ))
+
                 except BlockError as e:
                     gr.error = f"步骤{step_idx + 1} ({step.block_type}): {e.message}"
                     break

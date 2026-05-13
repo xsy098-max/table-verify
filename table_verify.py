@@ -375,6 +375,16 @@ class StepWidget(ttk.LabelFrame):
         self._inner.columnconfigure(1, weight=1)
 
     def _find_related_datasource(self, column_key):
+        source_map = {
+            'find_column': 'source', 'return_column': 'source',
+            'config_find_column': 'config_source', 'config_return_column': 'config_source',
+            'map_find_column': 'map_source', 'map_return_column': 'map_source',
+        }
+        if column_key in source_map:
+            ds_key = source_map[column_key]
+            if ds_key in self.param_widgets:
+                return self.param_widgets[ds_key][1].get()
+            return self.block_config.params.get(ds_key, '')
         for key in ('source', 'target_table'):
             if key in self.param_widgets:
                 return self.param_widgets[key][1].get()
@@ -383,13 +393,19 @@ class StepWidget(ttk.LabelFrame):
     def _on_datasource_change(self, key):
         ds_name = self.param_widgets[key][1].get()
         cols = self._get_columns_for_ds(ds_name)
+        col_key_map = {
+            'source': ['find_column', 'return_column'],
+            'config_source': ['config_find_column', 'config_return_column'],
+            'map_source': ['map_find_column', 'map_return_column'],
+        }
+        affected = col_key_map.get(key, [])
         for k, info in self.param_widgets.items():
             ptype = None
             for pdef in BLOCK_PARAMS.get(self.block_config.block_type, []):
                 if pdef['key'] == k:
                     ptype = pdef['type']
                     break
-            if ptype == 'column':
+            if ptype == 'column' and (not affected or k in affected):
                 info[2]['values'] = cols
 
     def _pick_multi_columns(self, key, var):

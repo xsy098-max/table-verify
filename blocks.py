@@ -161,6 +161,148 @@ def execute_extract_grouped(params, pool, tables):
     return result
 
 
+def execute_grouped_verify(params, pool, tables):
+    design_source = params.get('design_source', '')
+    group_column = params.get('group_column', '')
+    map_columns = params.get('map_columns', '')
+    mode_column = params.get('mode_column', '')
+
+    config_source = params.get('config_source', '')
+    config_find_column = params.get('config_find_column', '')
+    config_return_column = params.get('config_return_column', '')
+    split_delimiters = params.get('split_delimiters', '|_')
+
+    map_source = params.get('map_source', '')
+    map_find_column = params.get('map_find_column', '')
+    map_return_column = params.get('map_return_column', '')
+
+    label_var = params.get('label_var', '')
+
+    design_table = tables.get(design_source)
+    config_table = tables.get(config_source)
+    map_table = tables.get(map_source)
+
+    if not design_table or not config_table or not map_table:
+        raise BlockError('分组对表验证', "缺少数据源")
+
+    if not group_column or not map_columns or not config_find_column or not config_return_column:
+        raise BlockError('分组对表验证', "缺少必要参数")
+
+    map_cols = [c.strip() for c in map_columns.split(',')]
+
+    design_rows = design_table.raw_data[design_table.header_row - 1:]
+    groups_data = {}
+    current_group = None
+
+    for row_idx in range(len(design_table.raw_data)):
+        row = design_table.raw_data[row_idx]
+        row_dict = {}
+        for ci, h in enumerate(design_table.headers):
+            if ci < len(row):
+                row_dict[h] = row[ci]
+
+        gval = row_dict.get(group_column, '')
+        if gval and str(gval).strip():
+            current_group = str(gval).strip()
+
+        if not current_group:
+            continue
+
+        mode_val = ''
+        if mode_column:
+            mode_val = str(row_dict.get(mode_column, '')).strip()
+
+        for col in map_cols:
+            cell = str(row_dict.get(col, '')).strip()
+            if cell:
+                key = current_group
+                if key not in groups_data:
+                    groups_data[key] = []
+                groups_data[key].append(cell)
+
+    for key in groups_data:
+        seen = set()
+        unique = []
+        for item in groups_data[key]:
+            if item not in seen:
+                seen.add(item)
+                unique.append(item)
+        groups_data[key] = unique
+
+    map_id_to_name = {}
+    if map_table:
+        for row in map_table.raw_data:
+            row_dict = {}
+            for ci, h in enumerate(map_table.headers):
+                if ci < len(row):
+                    row_dict[h] = str(row[ci]).strip() if row[ci] else ''
+            find_val = row_dict.get(map_find_column, '')
+            ret_val = row_dict.get(map_return_column, '')
+            if find_val:
+                map_id_to_name[str(find_val)] = ret_val
+
+    results = []
+    for group_name, expected_maps in groups_data.items():
+        config_rows = config_table.find_rows(config_find_column, group_name)
+        if not config_rows:
+            for em in expected_maps:
+                results.append({
+                    'label': group_name,
+                    'mode': '',
+                    'expected': em,
+                    'actual': '未找到配置',
+                    'pass': False,
+                })
+            continue
+
+        config_row = config_rows[0]
+        game_map_type = str(config_row.get(config_return_column, '')).strip()
+
+        if not game_map_type:
+            for em in expected_maps:
+                results.append({
+                    'label': group_name,
+                    'mode': '',
+                    'expected': em,
+                    'actual': '配置为空',
+                    'pass': False,
+                })
+            continue
+
+        parts = [game_map_type]
+        for d in split_delimiters:
+            next_parts = []
+            for part in parts:
+                for p in str(part).split(d):
+                    p = p.strip()
+                    if p:
+                        next_parts.append(p)
+            parts = next_parts
+
+        actual_maps = []
+        for pid in parts:
+            name = map_id_to_name.get(pid, f'(ID:{pid}未找到)')
+            if name:
+                actual_maps.append(name)
+
+        for em in expected_maps:
+            matched = False
+            for am in actual_maps:
+                if em in am or am in em:
+                    matched = True
+                    break
+            results.append({
+                'label': group_name,
+                'mode': '',
+                'expected': em,
+                'actual': ', '.join(actual_maps),
+                'pass': matched,
+            })
+
+    pool['_verify_results'] = results
+    return results
+
+
 def execute_lookup(params, pool, tables):
     input_var = params.get('input_var', '')
     target_table = params.get('target_table', '')
@@ -450,6 +592,7 @@ EXECUTORS = {
     'split': execute_split,
     'flat_split': execute_flat_split,
     'extract_grouped': execute_extract_grouped,
+    'grouped_verify': execute_grouped_verify,
     'lookup': execute_lookup,
     'batch_lookup': execute_batch_lookup,
     'parse_drop': execute_parse_drop,
