@@ -528,19 +528,14 @@ class StepWidget(ttk.LabelFrame):
 class TableVerifyApp:
     @staticmethod
     def _find_base_dir():
-        cwd = os.getcwd()
-        if os.path.exists(os.path.join(cwd, 'pyappify.yml')):
-            return cwd
         path = os.path.dirname(os.path.abspath(__file__))
-        for _ in range(5):
-            if os.path.exists(os.path.join(path, 'pyappify.yml')):
+        for _ in range(10):
+            if os.path.isdir(os.path.join(path, 'data', 'apps')):
                 return path
             parent = os.path.dirname(path)
             if parent == path:
                 break
             path = parent
-        if getattr(sys, 'frozen', False):
-            return os.path.dirname(os.path.abspath(sys.executable))
         return os.path.dirname(os.path.abspath(__file__))
 
     _BASE_DIR = _find_base_dir.__func__()
