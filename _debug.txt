@@ -1,7 +1,0 @@
-cwd=E:\Doc\测试相关\配表工具
-__file__=E:\Doc\测试相关\配表工具\table_verify.py
-sys.executable=C:\Users\Administrator\AppData\Local\Programs\Python\Python312\python.exe
-frozen=False
-BASE_DIR=E:\Doc\测试相关\配表工具
-Tasks exists=True
-Tasks files=['bbb.task', '战令普通奖励+等级检查.task']
