@@ -539,10 +539,27 @@ class TableVerifyApp:
             if parent == path:
                 break
             path = parent
+        if getattr(sys, 'frozen', False):
+            return os.path.dirname(os.path.abspath(sys.executable))
         return os.path.dirname(os.path.abspath(__file__))
 
     _BASE_DIR = _find_base_dir.__func__()
     SETTINGS_FILE = os.path.join(_BASE_DIR, 'settings.json')
+
+    _debug_path = os.path.join(_BASE_DIR, '_debug.txt')
+    try:
+        with open(_debug_path, 'w', encoding='utf-8') as f:
+            f.write(f"cwd={os.getcwd()}\n")
+            f.write(f"__file__={__file__}\n")
+            f.write(f"sys.executable={sys.executable}\n")
+            f.write(f"frozen={getattr(sys, 'frozen', False)}\n")
+            f.write(f"BASE_DIR={_BASE_DIR}\n")
+            f.write(f"Tasks exists={os.path.exists(os.path.join(_BASE_DIR, 'Tasks'))}\n")
+            tasks_dir = os.path.join(_BASE_DIR, 'Tasks')
+            if os.path.exists(tasks_dir):
+                f.write(f"Tasks files={os.listdir(tasks_dir)}\n")
+    except Exception:
+        pass
 
     def __init__(self, root):
         self.root = root
