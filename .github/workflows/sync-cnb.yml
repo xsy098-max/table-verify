@@ -1,0 +1,23 @@
+name: Sync to CNB
+
+on:
+  push:
+    branches: [main]
+  release:
+    types: [published]
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Sync to CNB
+        run: |
+          git remote add cnb https://xsy098-max:${{ secrets.CNB_TOKEN }}@cnb.cool/xsy098-max/table-verify.git
+          git push cnb main --force
+          git push cnb --tags --force
