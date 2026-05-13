@@ -185,6 +185,12 @@ class TableLoader:
 
     @staticmethod
     def _load_excel(name, file_path, sheet_name, header_row):
+        try:
+            return TableLoader._load_excel_openpyxl(name, file_path, sheet_name, header_row)
+        except Exception:
+            return TableLoader._load_excel_xml(name, file_path, sheet_name, header_row)
+
+    def _load_excel_openpyxl(name, file_path, sheet_name, header_row):
         wb = load_workbook(file_path, data_only=True, read_only=True)
 
         if sheet_name and sheet_name in wb.sheetnames:
@@ -215,15 +221,130 @@ class TableLoader:
         table.build_index()
         return table
 
+    def _load_excel_xml(name, file_path, sheet_name, header_row):
+        import zipfile
+        import xml.etree.ElementTree as ET
+        import re
+
+        table = TableData(name, file_path)
+        table.header_row = header_row
+        table.raw_data = []
+
+        with zipfile.ZipFile(file_path, 'r') as z:
+            if sheet_name:
+                sheet_names = TableLoader._get_sheet_names_xml(file_path)
+                if sheet_name in sheet_names:
+                    sheet_idx = sheet_names.index(sheet_name) + 1
+                else:
+                    sheet_idx = 1
+            else:
+                sheet_idx = 1
+
+            sheet_file = f'xl/worksheets/sheet{sheet_idx}.xml'
+            if sheet_file not in z.namelist():
+                for n in z.namelist():
+                    if n.startswith('xl/worksheets/') and n.endswith('.xml'):
+                        sheet_file = n
+                        break
+
+            shared_strings = []
+            ss_path = 'xl/sharedStrings.xml'
+            if ss_path in z.namelist():
+                with z.open(ss_path) as f:
+                    tree = ET.parse(f)
+                    root = tree.getroot()
+                    ns = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
+                    for si in root.iter(f'{{{ns}}}si'):
+                        text_parts = []
+                        for t in si.iter(f'{{{ns}}}t'):
+                            if t.text:
+                                text_parts.append(t.text)
+                        shared_strings.append(''.join(text_parts))
+
+            with z.open(sheet_file) as f:
+                tree = ET.parse(f)
+                root = tree.getroot()
+                ns = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'
+
+                rows_data = {}
+                for row_elem in root.iter(f'{{{ns}}}row'):
+                    row_num = int(row_elem.get('r', '0'))
+                    cells = {}
+                    for cell in row_elem.iter(f'{{{ns}}}c'):
+                        ref = cell.get('r', '')
+                        col_match = re.match(r'([A-Z]+)', ref)
+                        if not col_match:
+                            continue
+                        col_letter = col_match.group(1)
+                        col_idx = col_letter_to_index(col_letter)
+                        cell_type = cell.get('t', '')
+                        val_elem = cell.find(f'{{{ns}}}v')
+                        val = val_elem.text if val_elem is not None else ''
+                        if cell_type == 's' and val:
+                            idx = int(val)
+                            val = shared_strings[idx] if idx < len(shared_strings) else val
+                        cells[col_idx] = val
+                    rows_data[row_num] = cells
+
+                if rows_data:
+                    max_row = max(rows_data.keys())
+                    max_col = 0
+                    for cells in rows_data.values():
+                        if cells:
+                            max_col = max(max_col, max(cells.keys()))
+                    for r in range(1, max_row + 1):
+                        row = [''] * (max_col + 1)
+                        cells = rows_data.get(r, {})
+                        for c, v in cells.items():
+                            if c <= max_col:
+                                row[c] = str(v)
+                        table.raw_data.append(row)
+
+        _pad_rows(table.raw_data)
+
+        header_idx = header_row - 1
+        if header_idx < len(table.raw_data):
+            table.headers = [str(h).strip() if h else '' for h in table.raw_data[header_idx]]
+        else:
+            table.headers = []
+
+        for i, h in enumerate(table.headers):
+            if not h:
+                table.headers[i] = f"Col_{index_to_col_letter(i)}"
+
+        table.build_index()
+        return table
+
     @staticmethod
     def get_sheet_names(file_path):
         ext = os.path.splitext(file_path)[1].lower()
         if ext in ('.xlsx', '.xlsm'):
-            wb = load_workbook(file_path, read_only=True)
-            names = wb.sheetnames
-            wb.close()
-            return names
+            try:
+                wb = load_workbook(file_path, data_only=True, read_only=True)
+                names = wb.sheetnames
+                wb.close()
+                return names
+            except Exception:
+                return TableLoader._get_sheet_names_xml(file_path)
         return []
+
+    def _get_sheet_names_xml(file_path):
+        import zipfile
+        import xml.etree.ElementTree as ET
+        names = []
+        try:
+            with zipfile.ZipFile(file_path, 'r') as z:
+                with z.open('xl/workbook.xml') as f:
+                    tree = ET.parse(f)
+                    root = tree.getroot()
+                    ns = {'s': 'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}
+                    for sheet in root.iter('{http://schemas.openxmlformats.org/spreadsheetml/2006/main}sheet'):
+                        name = sheet.get('name', '')
+                        if name:
+                            names.append(name)
+        except Exception:
+            pass
+        return names
 
 
 def _pad_rows(raw_data):
