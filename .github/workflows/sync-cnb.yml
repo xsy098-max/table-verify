@@ -18,6 +18,8 @@ jobs:
 
       - name: Sync to CNB
         run: |
-          git remote add cnb https://xsy098-max:${{ secrets.CNB_TOKEN }}@cnb.cool/xsy098-max/table-verify.git
+          git config --global user.name "github-actions"
+          git config --global user.email "actions@github.com"
+          git remote add cnb https://cnb:${{ secrets.CNB_TOKEN }}@cnb.cool/xsy098-max/table-verify.git
           git push cnb main --force
-          git push cnb --tags --force
+          git push cnb --tags --force 2>/dev/null || true
