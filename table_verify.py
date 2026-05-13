@@ -585,6 +585,7 @@ class TableVerifyApp:
         self._restore_window_state()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.root.after(500, self._track_sash_positions)
+        self.root.after(100, self._show_debug_info)
         self._new_task()
 
     def _mark_clean(self):
@@ -610,6 +611,21 @@ class TableVerifyApp:
             if not self.current_task_file:
                 return False
         return True
+
+    def _show_debug_info(self):
+        tasks_dir = os.path.join(self._BASE_DIR, 'Tasks')
+        info = (
+            f"cwd: {os.getcwd()}\n"
+            f"__file__: {__file__}\n"
+            f"sys.executable: {sys.executable}\n"
+            f"frozen: {getattr(sys, 'frozen', False)}\n"
+            f"BASE_DIR: {self._BASE_DIR}\n"
+            f"Tasks dir: {tasks_dir}\n"
+            f"Tasks exists: {os.path.exists(tasks_dir)}\n"
+        )
+        if os.path.exists(tasks_dir):
+            info += f"Tasks files: {os.listdir(tasks_dir)}\n"
+        messagebox.showinfo("Debug Info", info, parent=self.root)
 
     def _build_menu(self):
         menubar = tk.Menu(self.root)
