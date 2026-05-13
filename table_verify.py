@@ -565,6 +565,9 @@ class TableVerifyApp:
         self._restore_window_state()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.root.after(500, self._track_sash_positions)
+        self.root.after(100, self._deferred_init)
+
+    def _deferred_init(self):
         self._new_task()
 
     def _mark_clean(self):
@@ -765,35 +768,30 @@ class TableVerifyApp:
         self.steps_canvas.bind('<MouseWheel>', self._on_steps_mousewheel)
         self.steps_canvas.bind('<Button-4>', self._on_steps_mousewheel)
         self.steps_canvas.bind('<Button-5>', self._on_steps_mousewheel)
-        self.steps_canvas.bind('<Enter>', self._bind_steps_mousewheel)
-        self.steps_canvas.bind('<Leave>', self._unbind_steps_mousewheel)
+
+        self._mousewheel_bound = False
+        self.root.bind_all('<MouseWheel>', self._on_global_mousewheel, add='+')
 
         self.steps_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
-    def _bind_steps_mousewheel(self, event=None):
-        self._bind_mousewheel_to_children(self.steps_inner)
-
-    def _unbind_steps_mousewheel(self, event=None):
-        self._unbind_mousewheel_from_children(self.steps_inner)
-
-    def _bind_mousewheel_to_children(self, widget):
-        if not isinstance(widget, (ttk.Combobox, tk.Listbox, ttk.Entry, tk.Entry, tk.Spinbox, ttk.Spinbox)):
-            widget.bind('<MouseWheel>', self._on_steps_mousewheel)
-            widget.bind('<Button-4>', self._on_steps_mousewheel)
-            widget.bind('<Button-5>', self._on_steps_mousewheel)
-        for child in widget.winfo_children():
-            self._bind_mousewheel_to_children(child)
-
-    def _unbind_mousewheel_from_children(self, widget):
+    def _on_global_mousewheel(self, event):
         try:
-            widget.unbind('<MouseWheel>')
-            widget.unbind('<Button-4>')
-            widget.unbind('<Button-5>')
+            widget = event.widget
+            if not widget:
+                return
+            canvas = self.steps_canvas
+            parent = widget
+            while parent:
+                if parent == canvas or parent == self.steps_inner:
+                    self._on_steps_mousewheel(event)
+                    return
+                try:
+                    parent = parent.master
+                except Exception:
+                    break
         except Exception:
             pass
-        for child in widget.winfo_children():
-            self._unbind_mousewheel_from_children(child)
 
     def _on_steps_mousewheel(self, event):
         if event.num == 4:
@@ -1092,6 +1090,7 @@ class TableVerifyApp:
             return
 
         self._widgets_group_name = group.name
+        self.steps_canvas.update_idletasks()
 
         for idx, step in enumerate(group.steps):
             disabled = step.params.get('_disabled', False)
@@ -1121,8 +1120,6 @@ class TableVerifyApp:
                 sw.configure(foreground='gray')
             sw.pack(fill=tk.X, padx=5, pady=2)
             self.step_widgets.append(sw)
-
-        self._bind_mousewheel_to_children(self.steps_inner)
 
     def _move_step(self, idx, direction):
         group = self._get_current_group()
