@@ -281,6 +281,7 @@ class StepWidget(ttk.LabelFrame):
                 var = tk.StringVar(value=self.block_config.params.get(key, ''))
                 w = ttk.Combobox(frame, textvariable=var, values=self._get_ds_names(), width=30)
                 w.pack(side=tk.LEFT, fill=tk.X, expand=True)
+                w.bind('<Button-1>', lambda e, cb=w: cb.configure(values=self._get_ds_names()))
                 w.bind('<<ComboboxSelected>>', lambda e, k=key: self._on_datasource_change(k))
                 self.param_widgets[key] = ('combobox', var, w)
 
@@ -288,6 +289,7 @@ class StepWidget(ttk.LabelFrame):
                 var = tk.StringVar(value=self.block_config.params.get(key, ''))
                 w = ttk.Combobox(frame, textvariable=var, values=self._get_var_names(), width=30)
                 w.pack(side=tk.LEFT, fill=tk.X, expand=True)
+                w.bind('<Button-1>', lambda e, cb=w: cb.configure(values=self._get_var_names()))
                 self.param_widgets[key] = ('combobox', var, w)
 
             elif ptype == 'column':
@@ -296,6 +298,7 @@ class StepWidget(ttk.LabelFrame):
                 cols = self._get_columns_for_ds(ds_name)
                 w = ttk.Combobox(frame, textvariable=var, values=cols, width=30)
                 w.pack(side=tk.LEFT, fill=tk.X, expand=True)
+                w.bind('<Button-1>', lambda e, cb=w: cb.configure(values=self._get_columns_for_ds(self._find_related_datasource(key))))
                 self.param_widgets[key] = ('combobox', var, w)
 
             elif ptype == 'choice':
