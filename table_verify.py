@@ -206,6 +206,131 @@ class DataPreviewDialog(tk.Toplevel):
         tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
 
+class VariablePreviewDialog(tk.Toplevel):
+    def __init__(self, parent, step_label, variables, errors=None):
+        super().__init__(parent)
+        self.title(f"变量预览 - {step_label}")
+        self.geometry("750x550")
+        self.resizable(True, True)
+        self.transient(parent)
+        self._raw_values = {}
+
+        frame = ttk.Frame(self, padding=10)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        if errors:
+            err_frame = ttk.LabelFrame(frame, text="执行错误", padding=5)
+            err_frame.pack(fill=tk.X, pady=(0, 8))
+            for err in errors:
+                ttk.Label(err_frame, text=err, foreground='red', wraplength=700).pack(anchor=tk.W)
+        elif not variables:
+            ttk.Label(frame, text="此步骤前没有变量（可能所有步骤都被禁用）", foreground='gray').pack(pady=20)
+            return
+
+        cols = ('var_name', 'var_type', 'var_count', 'var_value')
+        tree = ttk.Treeview(frame, columns=cols, show='headings', height=20)
+        tree.heading('var_name', text='变量名')
+        tree.heading('var_type', text='类型')
+        tree.heading('var_count', text='数量')
+        tree.heading('var_value', text='值')
+        tree.column('var_name', width=180, minwidth=100, stretch=True)
+        tree.column('var_type', width=60, minwidth=40, stretch=False)
+        tree.column('var_count', width=60, minwidth=40, stretch=False)
+        tree.column('var_value', width=400, minwidth=200, stretch=True)
+
+        for i, (name, value) in enumerate(variables.items()):
+            iid = f"var_{i}"
+            self._raw_values[iid] = (name, value)
+            type_str, count_str, display = self._format_value(value)
+            tree.insert('', tk.END, iid=iid, values=(name, type_str, count_str, display))
+
+        vsb = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=tree.yview)
+        hsb = ttk.Scrollbar(frame, orient=tk.HORIZONTAL, command=tree.xview)
+        tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+
+        hsb.pack(side=tk.BOTTOM, fill=tk.X)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+        tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        tree.bind('<Double-1>', lambda e: self._show_detail(tree))
+
+    def _format_value(self, value):
+        if isinstance(value, dict):
+            type_str = 'dict'
+            count_str = str(len(value))
+            items = [f"{k}: {self._truncate(self._val_str(v))}" for k, v in value.items()]
+            display = '{ ' + ', '.join(items[:10]) + (' ...' if len(items) > 10 else '') + ' }'
+        elif isinstance(value, list):
+            type_str = 'list'
+            count_str = str(len(value))
+            items = [self._truncate(self._val_str(v)) for v in value]
+            display = '[ ' + ', '.join(items[:20]) + (' ...' if len(items) > 20 else '') + ' ]'
+        elif isinstance(value, str):
+            type_str = 'str'
+            count_str = str(len(value))
+            display = self._truncate(value)
+        elif isinstance(value, (int, float)):
+            type_str = 'num'
+            count_str = '1'
+            display = str(value)
+        elif value is None:
+            type_str = 'null'
+            count_str = ''
+            display = '(空)'
+        else:
+            type_str = type(value).__name__
+            count_str = ''
+            display = self._truncate(str(value))
+        return type_str, count_str, display
+
+    @staticmethod
+    def _val_str(v):
+        if v is None:
+            return '(空)'
+        return str(v)
+
+    @staticmethod
+    def _truncate(s, max_len=300):
+        s = str(s)
+        if len(s) > max_len:
+            return s[:max_len] + '...'
+        return s
+
+    def _show_detail(self, tree):
+        sel = tree.selection()
+        if not sel:
+            return
+        iid = sel[0]
+        raw = self._raw_values.get(iid)
+        if not raw:
+            return
+        var_name, var_value = raw
+
+        dlg = tk.Toplevel(self)
+        dlg.title(f"变量详情 - {var_name}")
+        dlg.geometry("600x400")
+        dlg.transient(self)
+
+        frame = ttk.Frame(dlg, padding=10)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        text = tk.Text(frame, wrap=tk.WORD, font=("Consolas", 10))
+        vsb = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=text.yview)
+        hsb = ttk.Scrollbar(frame, orient=tk.HORIZONTAL, command=text.xview)
+        text.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        hsb.pack(side=tk.BOTTOM, fill=tk.X)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+        text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        text.insert('1.0', var_name + " =\n")
+        if isinstance(var_value, (dict, list)):
+            text.insert(tk.END, json.dumps(var_value, ensure_ascii=False, indent=2))
+        else:
+            text.insert(tk.END, str(var_value))
+
+        text.configure(state=tk.DISABLED)
+
+
 class StepWidget(ttk.LabelFrame):
     def __init__(self, parent, block_config, app, step_index=0, **kwargs):
         super().__init__(parent, text=f"{BLOCK_TYPES.get(block_config.block_type, block_config.block_type)}", **kwargs)
@@ -1199,6 +1324,7 @@ class TableVerifyApp:
 
             btn_frame = ttk.Frame(header)
             btn_frame.pack(side=tk.RIGHT, padx=5)
+            ttk.Button(btn_frame, text="预览", command=lambda i=idx: self._preview_step(i)).pack(side=tk.LEFT, padx=1)
             ttk.Button(btn_frame, text="复制", command=lambda i=idx: self._copy_step(i)).pack(side=tk.LEFT, padx=1)
             ttk.Button(btn_frame, text="禁用" if not disabled else "启用", command=lambda i=idx: self._toggle_step(i)).pack(side=tk.LEFT, padx=1)
             ttk.Button(btn_frame, text="▲", width=2, command=lambda i=idx: self._move_step(i, -1)).pack(side=tk.LEFT, padx=1)
@@ -1226,6 +1352,79 @@ class TableVerifyApp:
             return
         group.steps.pop(idx)
         self._refresh_steps()
+
+    def _preview_step(self, idx):
+        self._collect_step_params()
+        group = self._get_current_group()
+        if not group:
+            messagebox.showwarning("提示", "请先选择验证组")
+            return
+
+        group_idx = None
+        for gi, g in enumerate(self.current_task.groups):
+            if g.name == group.name:
+                group_idx = gi
+                break
+        if group_idx is None:
+            return
+
+        self.status_bar.config(text=f"正在预览步骤{idx + 1}...")
+        self.root.update()
+
+        preview_task = copy.deepcopy(self.current_task)
+
+        for g in preview_task.groups:
+            g.steps = [s for s in g.steps if not s.params.get('_disabled', False)]
+            for s in g.steps:
+                s.params.pop('_disabled', None)
+
+        active_idx = 0
+        target_active_idx = -1
+        for si, step in enumerate(group.steps):
+            if not step.params.get('_disabled', False):
+                if si == idx:
+                    target_active_idx = active_idx
+                    break
+                active_idx += 1
+
+        if target_active_idx == -1:
+            disabled = group.steps[idx].params.get('_disabled', False)
+            if disabled:
+                messagebox.showinfo("提示", "该步骤已禁用，无法预览")
+            else:
+                messagebox.showinfo("提示", "未找到目标步骤")
+            self.status_bar.config(text="就绪")
+            return
+
+        def run():
+            try:
+                runner = Runner()
+                runner.tables = {}
+                for ds in preview_task.data_sources:
+                    try:
+                        runner.tables[ds.name] = self._load_table_cached(ds)
+                    except Exception:
+                        pass
+                snapshot, errors = runner.run_until_step(
+                    preview_task, group_idx, target_active_idx, skip_load=True
+                )
+                self.root.after(0, lambda: self._show_preview_result(
+                    idx, snapshot, errors
+                ))
+            except Exception as e:
+                self.root.after(0, lambda: self.status_bar.config(text=f"预览错误: {e}"))
+
+        thread = threading.Thread(target=run, daemon=True)
+        thread.start()
+
+    def _show_preview_result(self, step_idx, snapshot, errors):
+        step_label = f"步骤{step_idx + 1}执行后的变量"
+        VariablePreviewDialog(self.root, step_label, snapshot or {}, errors)
+        if errors:
+            self.status_bar.config(text=f"预览完成，但有错误")
+        else:
+            var_count = len(snapshot) if snapshot else 0
+            self.status_bar.config(text=f"预览完成，共 {var_count} 个变量（双击可查看详情）")
 
     def _collect_step_params(self):
         if not self._widgets_group_name:

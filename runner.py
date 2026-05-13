@@ -115,6 +115,37 @@ class Runner:
                 errors.append(f"加载数据源 '{ds.name}' 失败: {e}")
         return errors
 
+    def run_until_step(self, task, group_index, step_index, skip_load=False):
+        if not skip_load:
+            errors = self.load_tables(task.data_sources)
+            if errors:
+                return None, errors
+
+        if group_index < 0 or group_index >= len(task.groups):
+            return None, [f"验证组索引 {group_index} 超出范围"]
+
+        group = task.groups[group_index]
+        pool = VariablePool()
+        errors = []
+
+        for idx in range(step_index + 1):
+            if idx >= len(group.steps):
+                break
+            step = group.steps[idx]
+            if step.params.get('_disabled', False):
+                continue
+            try:
+                execute_block(step.block_type, step.params, pool, self.tables)
+            except BlockError as e:
+                errors.append(f"步骤{idx + 1} ({step.block_type}): {e.message}")
+                break
+            except Exception as e:
+                errors.append(f"步骤{idx + 1} ({step.block_type}): {e}")
+                break
+
+        snapshot = dict(pool._vars)
+        return snapshot, errors
+
     def run(self, task, skip_load=False):
         if not skip_load:
             errors = self.load_tables(task.data_sources)
