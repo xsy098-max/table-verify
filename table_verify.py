@@ -939,7 +939,10 @@ class TableVerifyApp:
     def _new_task(self):
         if self.step_widgets and not self._check_unsaved():
             return
-        self.current_task = Task(name="新任务")
+        name = simpledialog.askstring("新建任务", "请输入任务名称:", parent=self.root)
+        if not name:
+            name = "新任务"
+        self.current_task = Task(name=name)
         self.current_task_file = None
         self._refresh_all()
         self._mark_clean()
