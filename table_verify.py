@@ -301,6 +301,15 @@ class StepWidget(ttk.LabelFrame):
                 w.bind('<Button-1>', lambda e, cb=w: cb.configure(values=self._get_columns_for_ds(self._find_related_datasource(key))))
                 self.param_widgets[key] = ('combobox', var, w)
 
+            elif ptype == 'multi_column':
+                var = tk.StringVar(value=self.block_config.params.get(key, ''))
+                entry = ttk.Entry(frame, textvariable=var, width=30)
+                entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+                btn = ttk.Button(frame, text="选择列", width=6,
+                                 command=lambda k=key, v=var: self._pick_multi_columns(k, v))
+                btn.pack(side=tk.LEFT, padx=(2, 0))
+                self.param_widgets[key] = ('text', var, entry)
+
             elif ptype == 'choice':
                 choices = pdef.get('choices', [])
                 choice_labels = pdef.get('choice_labels', choices)
@@ -382,6 +391,51 @@ class StepWidget(ttk.LabelFrame):
                     break
             if ptype == 'column':
                 info[2]['values'] = cols
+
+    def _pick_multi_columns(self, key, var):
+        ds_name = self._find_related_datasource(key)
+        cols = self._get_columns_for_ds(ds_name)
+        if not cols:
+            messagebox.showinfo("提示", "请先选择数据源", parent=self)
+            return
+        current = [c.strip() for c in var.get().split(',') if c.strip()]
+        dlg = tk.Toplevel(self)
+        dlg.title("选择列")
+        dlg.resizable(False, False)
+        dlg.transient(self.winfo_toplevel())
+        dlg.grab_set()
+        frame = ttk.Frame(dlg, padding=10)
+        frame.pack()
+        ttk.Label(frame, text="勾选要返回的列:", font=('TkDefaultFont', 10, 'bold')).pack(anchor=tk.W, pady=(0, 5))
+        checks = {}
+        canvas = tk.Canvas(frame, height=min(len(cols) * 25, 300), width=250)
+        scrollbar = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=canvas.yview)
+        inner = ttk.Frame(canvas)
+        inner.bind('<Configure>', lambda e: canvas.configure(scrollregion=canvas.bbox('all')))
+        canvas.create_window((0, 0), window=inner, anchor=tk.NW)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        for col in cols:
+            bv = tk.BooleanVar(value=(col in current))
+            cb = ttk.Checkbutton(inner, text=col, variable=bv)
+            cb.pack(anchor=tk.W, padx=5)
+            checks[col] = bv
+        mid = ttk.Frame(frame)
+        mid.pack(fill=tk.X, pady=5)
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        def confirm():
+            selected = [c for c, bv in checks.items() if bv.get()]
+            var.set(','.join(selected))
+            dlg.destroy()
+
+        btn_frame = ttk.Frame(frame)
+        btn_frame.pack(fill=tk.X, pady=(5, 0))
+        ttk.Button(btn_frame, text="全选", command=lambda: [bv.set(True) for bv in checks.values()]).pack(side=tk.LEFT, padx=2)
+        ttk.Button(btn_frame, text="全不选", command=lambda: [bv.set(False) for bv in checks.values()]).pack(side=tk.LEFT, padx=2)
+        ttk.Button(btn_frame, text="确定", command=confirm).pack(side=tk.RIGHT, padx=2)
+        ttk.Button(btn_frame, text="取消", command=dlg.destroy).pack(side=tk.RIGHT, padx=2)
+        dlg.geometry("+%d+%d" % (self.winfo_rootx() + 50, self.winfo_rooty() + 50))
 
     def _on_mode_change(self, event=None):
         saved = self.collect_params()

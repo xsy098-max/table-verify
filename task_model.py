@@ -1,7 +1,7 @@
 import json
 import os
 
-VERSION = "2.3.1"
+VERSION = "2.3.2"
 
 AUTHOR = "奈叶摩尔"
 
@@ -156,7 +156,7 @@ BLOCK_PARAMS = {
         {'key': 'source', 'label': '来源表', 'type': 'datasource'},
         {'key': 'find_column', 'label': '分组列', 'type': 'column'},
         {'key': 'find_values_var', 'label': '分组值变量', 'type': 'variable'},
-        {'key': 'return_columns', 'label': '返回列(逗号分隔)', 'type': 'text'},
+        {'key': 'return_columns', 'label': '返回列', 'type': 'multi_column'},
         {'key': 'output_var', 'label': '保存为', 'type': 'text'},
     ],
     'split': [
