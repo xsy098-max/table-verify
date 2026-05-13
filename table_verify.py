@@ -140,8 +140,13 @@ class DataSourceDialog(tk.Toplevel):
                 self.sheet_combo['values'] = names
                 if names:
                     self.sheet_combo.set(names[0])
-            except Exception:
+                else:
+                    self.sheet_combo.set('')
+                    messagebox.showwarning("提示", f"未找到工作表，文件可能已损坏", parent=self)
+            except Exception as e:
                 self.sheet_combo['values'] = []
+                self.sheet_combo.set('')
+                messagebox.showerror("错误", f"读取工作表失败:\n{e}", parent=self)
         else:
             self.sheet_combo['values'] = []
             self.sheet_combo.set('')
