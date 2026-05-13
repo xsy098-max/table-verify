@@ -208,6 +208,26 @@ class TestBlocks(unittest.TestCase):
         self.assertEqual(result, [1001, 1002, 1003])
         self.assertEqual(pool['parts'], [1001, 1002, 1003])
 
+    def test_flat_split(self):
+        pool = VariablePool()
+        pool['raw'] = '5_7_15|34_35_36'
+        result = execute_block('flat_split', {
+            'input_var': 'raw',
+            'delimiters': '|_',
+            'output_var': 'ids',
+        }, pool, {})
+        self.assertEqual(result, [5, 7, 15, 34, 35, 36])
+
+    def test_flat_split_single(self):
+        pool = VariablePool()
+        pool['raw'] = '5_7_15'
+        result = execute_block('flat_split', {
+            'input_var': 'raw',
+            'delimiters': '|_',
+            'output_var': 'ids',
+        }, pool, {})
+        self.assertEqual(result, [5, 7, 15])
+
     def test_lookup(self):
         tables = self._make_tables()
         pool = VariablePool()

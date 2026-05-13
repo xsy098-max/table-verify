@@ -92,6 +92,33 @@ def execute_split(params, pool, tables):
     return result
 
 
+def execute_flat_split(params, pool, tables):
+    input_var = params.get('input_var', '')
+    delimiters = params.get('delimiters', '|_')
+    output_var = params.get('output_var', '')
+
+    if not input_var or not output_var:
+        raise BlockError('展平拆分', "未设置输入变量或保存为")
+
+    value = _get_var(pool, input_var, '展平拆分')
+    raw = str(value)
+
+    result = [raw]
+    for d in delimiters:
+        next_result = []
+        for part in result:
+            for p in str(part).split(d):
+                p = p.strip()
+                if p:
+                    next_result.append(p)
+        result = next_result
+
+    result = [_try_number(p) for p in result]
+
+    pool[output_var] = result
+    return result
+
+
 def execute_lookup(params, pool, tables):
     input_var = params.get('input_var', '')
     target_table = params.get('target_table', '')
@@ -379,6 +406,7 @@ def execute_item_mapping_compare(params, pool, tables):
 EXECUTORS = {
     'extract_value': execute_extract_value,
     'split': execute_split,
+    'flat_split': execute_flat_split,
     'lookup': execute_lookup,
     'batch_lookup': execute_batch_lookup,
     'parse_drop': execute_parse_drop,

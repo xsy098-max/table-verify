@@ -1,7 +1,7 @@
 import json
 import os
 
-VERSION = "2.1.0"
+VERSION = "2.2.0"
 
 AUTHOR = "奈叶摩尔"
 
@@ -119,6 +119,7 @@ class Task:
 BLOCK_TYPES = {
     'extract_value': '📥 取值',
     'split': '✂ 拆分',
+    'flat_split': '📋 展平拆分',
     'lookup': '🔍 查表',
     'batch_lookup': '🔎 批量查表',
     'parse_drop': '🎁 解析掉落',
@@ -130,6 +131,7 @@ BLOCK_TYPES = {
 BLOCK_DESCRIPTIONS = {
     'extract_value': '从表中取出一个值或一组值',
     'split': '按分隔符拆分一个值为数组',
+    'flat_split': '按多级分隔符展平拆分(如5_7|8_9→[5,7,8,9])',
     'lookup': '用一个值去另一张表查找对应字段',
     'batch_lookup': '对一组值逐个去另一张表查找',
     'parse_drop': '解析掉落格式数据(权重,道具ID,最小,最大)',
@@ -151,6 +153,11 @@ BLOCK_PARAMS = {
     'split': [
         {'key': 'input_var', 'label': '输入变量', 'type': 'variable'},
         {'key': 'delimiter', 'label': '分隔符', 'type': 'choice', 'choices': ['|', ',', '_'], 'allow_custom': True},
+        {'key': 'output_var', 'label': '保存为', 'type': 'text'},
+    ],
+    'flat_split': [
+        {'key': 'input_var', 'label': '输入变量', 'type': 'variable'},
+        {'key': 'delimiters', 'label': '分隔符(按顺序)', 'type': 'text'},
         {'key': 'output_var', 'label': '保存为', 'type': 'text'},
     ],
     'lookup': [
