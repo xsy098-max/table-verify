@@ -568,7 +568,10 @@ class TableVerifyApp:
         self.root.after(100, self._deferred_init)
 
     def _deferred_init(self):
-        self._new_task()
+        self.current_task = Task(name="新任务")
+        self.current_task_file = None
+        self._refresh_all()
+        self._mark_clean()
 
     def _mark_clean(self):
         self._collect_step_params()
