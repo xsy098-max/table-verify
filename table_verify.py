@@ -565,13 +565,6 @@ class TableVerifyApp:
         self._restore_window_state()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
         self.root.after(500, self._track_sash_positions)
-        self.root.after(100, self._deferred_init)
-
-    def _deferred_init(self):
-        self.current_task = Task(name="新任务")
-        self.current_task_file = None
-        self._refresh_all()
-        self._mark_clean()
 
     def _mark_clean(self):
         self._collect_step_params()
@@ -895,28 +888,32 @@ class TableVerifyApp:
     def _restore_window_state(self):
         self.root.geometry("1280x800")
         try:
-            if not os.path.exists(self.SETTINGS_FILE):
-                return
-            with open(self.SETTINGS_FILE, 'r', encoding='utf-8') as f:
-                settings = json.load(f)
-            geo = settings.get('geometry', '1280x800')
-            self.root.geometry(geo)
-            self.root.update_idletasks()
-            paned_h_sash = settings.get('paned_h_sash', 0)
-            paned_v_sash = settings.get('paned_v_sash', 0)
-            if paned_h_sash > 50:
-                self._last_sash_h = paned_h_sash
-            if paned_v_sash > 50:
-                self._last_sash_v = paned_v_sash
-            self.root.after(200, self._apply_sash_positions)
-            last_task = settings.get('last_task', '')
-            if last_task:
-                tasks_dir = os.path.join(self._BASE_DIR, 'Tasks')
-                task_path = os.path.join(tasks_dir, last_task)
-                if os.path.exists(task_path):
-                    self.root.after(400, lambda: self._load_task_file(task_path))
+            if os.path.exists(self.SETTINGS_FILE):
+                with open(self.SETTINGS_FILE, 'r', encoding='utf-8') as f:
+                    settings = json.load(f)
+                geo = settings.get('geometry', '1280x800')
+                self.root.geometry(geo)
+                self.root.update_idletasks()
+                paned_h_sash = settings.get('paned_h_sash', 0)
+                paned_v_sash = settings.get('paned_v_sash', 0)
+                if paned_h_sash > 50:
+                    self._last_sash_h = paned_h_sash
+                if paned_v_sash > 50:
+                    self._last_sash_v = paned_v_sash
+                self.root.after(200, self._apply_sash_positions)
+                last_task = settings.get('last_task', '')
+                if last_task:
+                    tasks_dir = os.path.join(self._BASE_DIR, 'Tasks')
+                    task_path = os.path.join(tasks_dir, last_task)
+                    if os.path.exists(task_path):
+                        self.root.after(400, lambda: self._load_task_file(task_path))
+                        return
         except Exception:
             pass
+        self.current_task = Task(name="新任务")
+        self.current_task_file = None
+        self._refresh_all()
+        self._mark_clean()
 
     def _apply_sash_positions(self):
         try:
