@@ -119,6 +119,48 @@ def execute_flat_split(params, pool, tables):
     return result
 
 
+def execute_extract_grouped(params, pool, tables):
+    source = params.get('source', '')
+    find_column = params.get('find_column', '')
+    find_values_var = params.get('find_values_var', '')
+    return_columns = params.get('return_columns', '')
+    output_var = params.get('output_var', '')
+
+    if not source or not find_column or not find_values_var or not return_columns or not output_var:
+        raise BlockError('分组取值', "缺少必要参数")
+
+    table = tables.get(source)
+    if not table:
+        raise BlockError('分组取值', f"未找到数据源: {source}")
+
+    find_values = _get_var(pool, find_values_var, '分组取值')
+    if isinstance(find_values, str):
+        find_values = [find_values]
+
+    ret_cols = [c.strip() for c in return_columns.split(',')]
+
+    result = {}
+    for val in find_values:
+        key = str(val)
+        rows = table.find_rows(find_column, key)
+        collected = []
+        for row in rows:
+            for col in ret_cols:
+                cell_val = row.get(col, '')
+                if cell_val and str(cell_val).strip():
+                    collected.append(str(cell_val).strip())
+        seen = set()
+        unique = []
+        for item in collected:
+            if item not in seen:
+                seen.add(item)
+                unique.append(item)
+        result[key] = unique
+
+    pool[output_var] = result
+    return result
+
+
 def execute_lookup(params, pool, tables):
     input_var = params.get('input_var', '')
     target_table = params.get('target_table', '')
@@ -407,6 +449,7 @@ EXECUTORS = {
     'extract_value': execute_extract_value,
     'split': execute_split,
     'flat_split': execute_flat_split,
+    'extract_grouped': execute_extract_grouped,
     'lookup': execute_lookup,
     'batch_lookup': execute_batch_lookup,
     'parse_drop': execute_parse_drop,

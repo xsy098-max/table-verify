@@ -1,7 +1,7 @@
 import json
 import os
 
-VERSION = "2.2.0"
+VERSION = "2.3.0"
 
 AUTHOR = "奈叶摩尔"
 
@@ -118,6 +118,7 @@ class Task:
 
 BLOCK_TYPES = {
     'extract_value': '📥 取值',
+    'extract_grouped': '📊 分组取值',
     'split': '✂ 拆分',
     'flat_split': '📋 展平拆分',
     'lookup': '🔍 查表',
@@ -130,6 +131,7 @@ BLOCK_TYPES = {
 
 BLOCK_DESCRIPTIONS = {
     'extract_value': '从表中取出一个值或一组值',
+    'extract_grouped': '按条件分组取多行多列值(去重)',
     'split': '按分隔符拆分一个值为数组',
     'flat_split': '按多级分隔符展平拆分(如5_7|8_9→[5,7,8,9])',
     'lookup': '用一个值去另一张表查找对应字段',
@@ -148,6 +150,13 @@ BLOCK_PARAMS = {
         {'key': 'find_column', 'label': '查找列', 'type': 'column', 'condition': 'mode==condition'},
         {'key': 'find_value', 'label': '查找值', 'type': 'text', 'condition': 'mode==condition'},
         {'key': 'return_column', 'label': '返回列', 'type': 'column', 'condition': 'mode==condition'},
+        {'key': 'output_var', 'label': '保存为', 'type': 'text'},
+    ],
+    'extract_grouped': [
+        {'key': 'source', 'label': '来源表', 'type': 'datasource'},
+        {'key': 'find_column', 'label': '分组列', 'type': 'column'},
+        {'key': 'find_values_var', 'label': '分组值变量', 'type': 'variable'},
+        {'key': 'return_columns', 'label': '返回列(逗号分隔)', 'type': 'text'},
         {'key': 'output_var', 'label': '保存为', 'type': 'text'},
     ],
     'split': [

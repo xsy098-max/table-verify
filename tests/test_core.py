@@ -228,6 +228,33 @@ class TestBlocks(unittest.TestCase):
         }, pool, {})
         self.assertEqual(result, [5, 7, 15])
 
+    def test_extract_grouped(self):
+        bp = TableData('DesignMap', 'design.csv')
+        bp.header_row = 1
+        bp.raw_data = [
+            ['rank', 'mode', 'map1', 'map2', 'map3'],
+            ['初战青铜Ⅱ', '经典', '地图A', '地图B', ''],
+            ['初战青铜Ⅱ', '竞速', '地图C', '', ''],
+            ['初战青铜Ⅰ', '经典', '地图A', '地图D', ''],
+            ['初战青铜Ⅰ', '竞速', '地图E', '', ''],
+            ['初战青铜Ⅰ', '特殊', '地图F', '地图G', ''],
+        ]
+        bp.headers = ['rank', 'mode', 'map1', 'map2', 'map3']
+        bp.build_index()
+
+        pool = VariablePool()
+        pool['ranks'] = ['初战青铜Ⅱ', '初战青铜Ⅰ']
+        result = execute_block('extract_grouped', {
+            'source': 'DesignMap',
+            'find_column': 'rank',
+            'find_values_var': 'ranks',
+            'return_columns': 'map1,map2,map3',
+            'output_var': 'grouped',
+        }, pool, {'DesignMap': bp})
+        self.assertEqual(result['初战青铜Ⅱ'], ['地图A', '地图B', '地图C'])
+        self.assertEqual(result['初战青铜Ⅰ'], ['地图A', '地图D', '地图E', '地图F', '地图G'])
+        self.assertEqual(pool['grouped'], result)
+
     def test_lookup(self):
         tables = self._make_tables()
         pool = VariablePool()
