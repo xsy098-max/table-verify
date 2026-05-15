@@ -206,6 +206,78 @@ class DataPreviewDialog(tk.Toplevel):
         tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
 
+class BlockHelpDialog(tk.Toplevel):
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("积木使用指南")
+        self.geometry("900x620")
+        self.resizable(True, True)
+        self.transient(parent)
+
+        from task_model import BLOCK_HELP
+
+        main = ttk.PanedWindow(self, orient=tk.HORIZONTAL)
+        main.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        left_frame = ttk.Frame(main, width=180)
+        main.add(left_frame, weight=0)
+
+        right_frame = ttk.Frame(main)
+        main.add(right_frame, weight=1)
+
+        nav = ttk.Treeview(left_frame, show='tree', selectmode='browse', height=25)
+        nav.pack(fill=tk.BOTH, expand=True)
+
+        items = []
+        for key in ['quick_start'] + list(BLOCK_HELP.keys()):
+            if key == 'quick_start':
+                continue
+            info = BLOCK_HELP[key]
+            items.append((key, info['title']))
+
+        nav.insert('', tk.END, iid='quick_start', text=BLOCK_HELP['quick_start']['title'], open=True)
+        for key, title in items:
+            nav.insert('', tk.END, iid=key, text=title)
+
+        text_frame = ttk.Frame(right_frame)
+        text_frame.pack(fill=tk.BOTH, expand=True)
+
+        text = tk.Text(text_frame, wrap=tk.WORD, font=('TkDefaultFont', 11), padx=15, pady=10, spacing3=3)
+        vsb = ttk.Scrollbar(text_frame, orient=tk.VERTICAL, command=text.yview)
+        hsb = ttk.Scrollbar(text_frame, orient=tk.HORIZONTAL, command=text.xview)
+        text.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        hsb.pack(side=tk.BOTTOM, fill=tk.X)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+        text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        text.tag_configure('heading', font=('TkDefaultFont', 13, 'bold'), spacing1=10, spacing3=5)
+        text.tag_configure('subheading', font=('TkDefaultFont', 11, 'bold'), spacing1=8, spacing3=3)
+        text.tag_configure('bullet', lmargin1=20, lmargin2=30)
+        text.tag_configure('indent', lmargin1=20, lmargin2=30)
+        text.tag_configure('example', font=('Consolas', 10), lmargin1=20, lmargin2=30, background='#f5f5f5')
+        text.tag_configure('tip', foreground='#1565C0', lmargin1=20, lmargin2=30)
+        text.tag_configure('warning', foreground='#C62828', lmargin1=20, lmargin2=30)
+
+        def on_select(event=None):
+            sel = nav.selection()
+            if not sel:
+                return
+            key = sel[0]
+            content = BLOCK_HELP.get(key, {}).get('content', '')
+            text.configure(state=tk.NORMAL)
+            text.delete('1.0', tk.END)
+            text.insert(tk.END, content)
+            text.configure(state=tk.DISABLED)
+
+        nav.bind('<<TreeviewSelect>>', on_select)
+        nav.selection_set('quick_start')
+        on_select()
+
+        btn_frame = ttk.Frame(self, padding=5)
+        btn_frame.pack(fill=tk.X)
+        ttk.Button(btn_frame, text="关闭", command=self.destroy, width=10).pack(side=tk.RIGHT)
+
+
 class VariablePreviewDialog(tk.Toplevel):
     def __init__(self, parent, step_label, variables, errors=None):
         super().__init__(parent)
@@ -811,6 +883,8 @@ class TableVerifyApp:
         menubar.add_cascade(label="运行", menu=run_menu)
 
         help_menu = tk.Menu(menubar, tearoff=0)
+        help_menu.add_command(label="积木使用指南", command=lambda: BlockHelpDialog(self.root))
+        help_menu.add_separator()
         help_menu.add_command(label="关于", command=self._show_about)
         menubar.add_cascade(label="帮助", menu=help_menu)
 
