@@ -172,6 +172,7 @@ def execute_extract_grouped(params, pool, tables):
     output_var = params.get('output_var', '')
     skip_values_str = params.get('skip_values', '')
     skip_values = set(v.strip() for v in skip_values_str.split(',') if v.strip())
+    fill_down = params.get('fill_down', False)
 
     if not source or not find_column or not find_values_var or not return_columns or not output_var:
         raise BlockError('分组取值', "缺少必要参数")
@@ -186,26 +187,80 @@ def execute_extract_grouped(params, pool, tables):
 
     ret_cols = [c.strip() for c in return_columns.split(',')]
 
-    result = {}
-    for val in find_values:
-        key = str(val)
-        rows = table.find_rows(find_column, key)
-        collected = []
-        for row in rows:
-            for col in ret_cols:
-                cell_val = row.get(col, '')
-                stripped = str(cell_val).strip()
-                if stripped and stripped not in skip_values:
-                    collected.append(stripped)
+    if fill_down:
+        result = _extract_grouped_fill_down(table, find_column, find_values, ret_cols, skip_values)
+    else:
+        result = {}
+        for val in find_values:
+            key = str(val)
+            rows = table.find_rows(find_column, key)
+            collected = []
+            for row in rows:
+                for col in ret_cols:
+                    cell_val = row.get(col, '')
+                    stripped = str(cell_val).strip()
+                    if stripped and stripped not in skip_values:
+                        collected.append(stripped)
+            seen = set()
+            unique = []
+            for item in collected:
+                if item not in seen:
+                    seen.add(item)
+                    unique.append(item)
+            result[key] = unique
+
+    pool[output_var] = result
+    return result
+
+
+def _extract_grouped_fill_down(table, find_column, find_values, ret_cols, skip_values):
+    find_values_set = set(str(v) for v in find_values)
+    col_idx = None
+    for ci, h in enumerate(table.headers):
+        if str(h).strip() == find_column.strip():
+            col_idx = ci
+            break
+    if col_idx is None:
+        return {}
+
+    result = {str(v): [] for v in find_values}
+    current_group = ''
+
+    for row_idx in range(table.header_row, len(table.raw_data)):
+        row = table.raw_data[row_idx]
+        cell_val = str(row[col_idx]).strip() if col_idx < len(row) else ''
+
+        if cell_val:
+            current_group = cell_val
+        elif not current_group:
+            continue
+
+        if current_group not in find_values_set:
+            if cell_val:
+                current_group = ''
+            continue
+
+        for ci, col in enumerate(ret_cols):
+            target_idx = None
+            for hi, h in enumerate(table.headers):
+                if str(h).strip() == col:
+                    target_idx = hi
+                    break
+            if target_idx is None:
+                continue
+            val = str(row[target_idx]).strip() if target_idx < len(row) else ''
+            if val and val not in skip_values:
+                result[current_group].append(val)
+
+    for key in result:
         seen = set()
         unique = []
-        for item in collected:
+        for item in result[key]:
             if item not in seen:
                 seen.add(item)
                 unique.append(item)
         result[key] = unique
 
-    pool[output_var] = result
     return result
 
 

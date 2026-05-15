@@ -1630,6 +1630,12 @@ class TableVerifyApp:
         if not sel:
             return
         item = sel[0]
+        tags = self.result_tree.item(item, 'tags')
+        if 'task_header' in tags or 'group_header' in tags:
+            return
+        children = self.result_tree.get_children(item)
+        if children:
+            return
         values = self.result_tree.item(item, 'values')
         if not values:
             return
