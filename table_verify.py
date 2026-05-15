@@ -233,10 +233,10 @@ class VariablePreviewDialog(tk.Toplevel):
         tree.heading('var_type', text='类型')
         tree.heading('var_count', text='数量')
         tree.heading('var_value', text='值')
-        tree.column('var_name', width=180, minwidth=100, stretch=True)
+        tree.column('var_name', width=180, minwidth=100, stretch=False)
         tree.column('var_type', width=60, minwidth=40, stretch=False)
         tree.column('var_count', width=60, minwidth=40, stretch=False)
-        tree.column('var_value', width=400, minwidth=200, stretch=True)
+        tree.column('var_value', width=500, minwidth=200, stretch=False)
 
         for i, (name, value) in enumerate(variables.items()):
             iid = f"var_{i}"
@@ -1003,9 +1003,9 @@ class TableVerifyApp:
     def _build_results_panel(self, parent):
         cols = ('label', 'item_name', 'expected', 'actual', 'result', 'message')
         self.result_tree = ttk.Treeview(parent, columns=cols, show='headings', height=10)
-        for c, t in zip(cols, ('标签', '道具', '期望值', '实际值', '结果', '说明')):
+        for c, t, w in zip(cols, ('标签', '道具', '期望值', '实际值', '结果', '说明'), (100, 80, 250, 250, 60, 300)):
             self.result_tree.heading(c, text=t)
-            self.result_tree.column(c, width=80, minwidth=50, stretch=True)
+            self.result_tree.column(c, width=w, minwidth=50, stretch=False)
 
         vsb = ttk.Scrollbar(parent, orient=tk.VERTICAL, command=self.result_tree.yview)
         hsb = ttk.Scrollbar(parent, orient=tk.HORIZONTAL, command=self.result_tree.xview)
@@ -1019,6 +1019,7 @@ class TableVerifyApp:
         self.result_tree.tag_configure('skip', foreground='#9e9e9e')
         self.result_tree.tag_configure('group_header', background='#e3f2fd', font=('TkDefaultFont', 10, 'bold'))
         self.result_tree.tag_configure('task_header', background='#c8e6c9', font=('TkDefaultFont', 10, 'bold'))
+        self.result_tree.bind('<Double-1>', self._on_result_double_click)
 
     def _refresh_table_cache(self):
         self.table_cache.clear()
@@ -1597,11 +1598,13 @@ class TableVerifyApp:
                 for d in gr.details:
                     tag = 'skip' if d.skipped else ('pass' if d.passed else 'fail')
                     status = '跳过' if d.skipped else ('通过' if d.passed else '失败')
+                    exp_str = str(d.expected) if d.expected is not None else ''
+                    act_str = str(d.actual) if d.actual is not None else ''
                     self.result_tree.insert(group_id, tk.END, values=(
                         d.label, d.item_name or '',
-                        str(d.expected) if d.expected is not None else '',
-                        str(d.actual) if d.actual is not None else '',
-                        status, d.message,
+                        self._truncate_cell(exp_str),
+                        self._truncate_cell(act_str),
+                        status, self._truncate_cell(d.message),
                     ), tags=(tag,))
 
         status = f"完成! 共{len(results)}个任务 通过:{total_p} 失败:{total_f} 跳过:{total_s}"
@@ -1614,6 +1617,45 @@ class TableVerifyApp:
     def _clear_results(self):
         for item in self.result_tree.get_children():
             self.result_tree.delete(item)
+
+    @staticmethod
+    def _truncate_cell(s, max_len=200):
+        s = str(s) if s is not None else ''
+        if len(s) > max_len:
+            return s[:max_len] + '...'
+        return s
+
+    def _on_result_double_click(self, event=None):
+        sel = self.result_tree.selection()
+        if not sel:
+            return
+        item = sel[0]
+        values = self.result_tree.item(item, 'values')
+        if not values:
+            return
+
+        labels = ('标签', '道具', '期望值', '实际值', '结果', '说明')
+        dlg = tk.Toplevel(self.root)
+        dlg.title("结果详情")
+        dlg.geometry("650x400")
+        dlg.transient(self.root)
+
+        frame = ttk.Frame(dlg, padding=10)
+        frame.pack(fill=tk.BOTH, expand=True)
+
+        text = tk.Text(frame, wrap=tk.WORD, font=("Consolas", 10))
+        vsb = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=text.yview)
+        hsb = ttk.Scrollbar(frame, orient=tk.HORIZONTAL, command=text.xview)
+        text.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        hsb.pack(side=tk.BOTTOM, fill=tk.X)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+        text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        for label, val in zip(labels, values):
+            text.insert(tk.END, f"【{label}】\n", 'header')
+            text.insert(tk.END, f"{val}\n\n")
+        text.tag_configure('header', font=('TkDefaultFont', 10, 'bold'))
+        text.configure(state=tk.DISABLED)
 
     def _save_task(self):
         self._collect_step_params()
