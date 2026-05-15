@@ -98,26 +98,26 @@ def execute_extract_value(params, pool, tables):
 
 
 def execute_split(params, pool, tables):
-    input_var = params.get('input_var', '')
-    delimiter = params.get('delimiter', '|')
-    output_var = params.get('output_var', '')
-
-    if not input_var or not output_var:
-        raise BlockError('拆分', "未设置输入变量或保存为")
-
-    value = _get_var(pool, input_var, '拆分')
-    raw = str(value)
-    parts = raw.split(delimiter)
-    result = []
-    for p in parts:
-        p = p.strip()
-        if p:
-            result.append(_try_number(p))
-        else:
-            result.append('')
-
-    pool[output_var] = result
-    return result
+    mode = params.get('split_mode', 'single')
+    if mode == 'single':
+        input_var = params.get('input_var', '')
+        delimiter = params.get('delimiter', params.get('delimiters', '|'))
+        output_var = params.get('output_var', '')
+        if not input_var or not output_var:
+            raise BlockError('拆分', "未设置输入变量或保存为")
+        value = _get_var(pool, input_var, '拆分')
+        raw = str(value)
+        parts = raw.split(delimiter)
+        result = []
+        for p in parts:
+            p = p.strip()
+            if p:
+                result.append(_try_number(p))
+            else:
+                result.append('')
+        pool[output_var] = result
+        return result
+    return execute_flat_split(params, pool, tables)
 
 
 def _do_flat_split(value_str, delimiters):
@@ -133,17 +133,32 @@ def _do_flat_split(value_str, delimiters):
     return [_try_number(p) for p in result]
 
 
+def _do_single_split(value_str, delimiter):
+    parts = str(value_str).split(delimiter)
+    result = []
+    for p in parts:
+        p = p.strip()
+        if p:
+            result.append(_try_number(p))
+        else:
+            result.append('')
+    return result
+
+
 def execute_flat_split(params, pool, tables):
     input_var = params.get('input_var', '')
+    split_mode = params.get('split_mode', 'multi')
     delimiters = params.get('delimiters', '|_')
     output_var = params.get('output_var', '')
     label_var = params.get('label_var', '')
 
     if not input_var or not output_var:
-        raise BlockError('展平拆分', "未设置输入变量或保存为")
+        raise BlockError('拆分', "未设置输入变量或保存为")
 
-    value = _get_var(pool, input_var, '展平拆分')
-    labels = _get_var(pool, label_var, '展平拆分') if label_var else None
+    value = _get_var(pool, input_var, '拆分')
+    labels = _get_var(pool, label_var, '拆分') if label_var else None
+
+    do_split = (lambda v: _do_single_split(v, delimiters)) if split_mode == 'single' else (lambda v: _do_flat_split(v, delimiters))
 
     if labels and isinstance(value, list):
         if isinstance(labels, str):
@@ -151,14 +166,19 @@ def execute_flat_split(params, pool, tables):
         result = {}
         for i, item in enumerate(value):
             key = str(labels[i]) if i < len(labels) else str(i)
-            result[key] = _do_flat_split(item, delimiters)
+            result[key] = do_split(item)
     elif isinstance(value, list):
-        parts = []
-        for item in value:
-            parts.extend(_do_flat_split(item, delimiters))
-        result = parts
+        if split_mode == 'single':
+            result = do_split(value[0]) if len(value) == 1 else [do_split(item) for item in value]
+            if isinstance(result[0], list) and len(result) == 1:
+                result = result[0]
+        else:
+            parts = []
+            for item in value:
+                parts.extend(do_split(item))
+            result = parts
     else:
-        result = _do_flat_split(value, delimiters)
+        result = do_split(value)
 
     pool[output_var] = result
     return result
