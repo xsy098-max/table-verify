@@ -120,28 +120,45 @@ def execute_split(params, pool, tables):
     return result
 
 
+def _do_flat_split(value_str, delimiters):
+    result = [str(value_str)]
+    for d in delimiters:
+        next_result = []
+        for part in result:
+            for p in part.split(d):
+                p = p.strip()
+                if p:
+                    next_result.append(p)
+        result = next_result
+    return [_try_number(p) for p in result]
+
+
 def execute_flat_split(params, pool, tables):
     input_var = params.get('input_var', '')
     delimiters = params.get('delimiters', '|_')
     output_var = params.get('output_var', '')
+    label_var = params.get('label_var', '')
 
     if not input_var or not output_var:
         raise BlockError('展平拆分', "未设置输入变量或保存为")
 
     value = _get_var(pool, input_var, '展平拆分')
-    raw = str(value)
+    labels = _get_var(pool, label_var, '展平拆分') if label_var else None
 
-    result = [raw]
-    for d in delimiters:
-        next_result = []
-        for part in result:
-            for p in str(part).split(d):
-                p = p.strip()
-                if p:
-                    next_result.append(p)
-        result = next_result
-
-    result = [_try_number(p) for p in result]
+    if labels and isinstance(value, list):
+        if isinstance(labels, str):
+            labels = [labels]
+        result = {}
+        for i, item in enumerate(value):
+            key = str(labels[i]) if i < len(labels) else str(i)
+            result[key] = _do_flat_split(item, delimiters)
+    elif isinstance(value, list):
+        parts = []
+        for item in value:
+            parts.extend(_do_flat_split(item, delimiters))
+        result = parts
+    else:
+        result = _do_flat_split(value, delimiters)
 
     pool[output_var] = result
     return result
@@ -226,6 +243,22 @@ def execute_batch_lookup(params, pool, tables):
 
     values = _get_var(pool, input_var, '批量查表')
     table = _get_source(tables, target_table)
+
+    if isinstance(values, dict):
+        result = {}
+        for key, val_list in values.items():
+            if not isinstance(val_list, list):
+                val_list = [val_list]
+            looked = []
+            for val in val_list:
+                row = table.find_row(find_column, str(val))
+                if row:
+                    looked.append(row.get(return_column, ''))
+                else:
+                    looked.append('')
+            result[key] = looked
+        pool[output_var] = result
+        return result
 
     if not isinstance(values, list):
         values = [values]
@@ -346,6 +379,9 @@ def execute_compare(params, pool, tables):
     actual = _get_var(pool, actual_var, '比较')
     labels = _get_var(pool, label_var, '比较') if label_var else None
 
+    if isinstance(expected, dict) and isinstance(actual, dict):
+        return _compare_dicts(expected, actual, compare_mode, skip_empty)
+
     if not isinstance(expected, list):
         expected = [expected]
     if not isinstance(actual, list):
@@ -370,27 +406,69 @@ def execute_compare(params, pool, tables):
             ))
             continue
 
-        if compare_mode == 'exact_match':
-            exp_num = _try_number(exp_str)
-            act_num = _try_number(act_str)
-            passed = (exp_num == act_num)
-            msg = '' if passed else f"期望 {exp_str}, 实际 {act_str}"
-        elif compare_mode == 'contains':
-            passed = exp_str in str(act)
-            msg = '' if passed else f"期望包含 '{exp_str}', 实际 '{act_str}'"
-        elif compare_mode == 'set_match':
-            exp_set = set(exp_str.split('|')) if exp_str else set()
-            act_set = set(act_str.split('|')) if act_str else set()
-            passed = exp_set == act_set
-            msg = '' if passed else f"期望集合 {exp_set}, 实际集合 {act_set}"
-        else:
-            passed = exp_str == act_str
-            msg = '' if passed else f"期望 {exp_str}, 实际 {act_str}"
-
+        passed, msg = _compare_values(exp_str, act_str, compare_mode)
         details.append(CompareDetail(
             label=label, expected=exp, actual=act,
             passed=passed, skipped=False, message=msg
         ))
+
+    return details
+
+
+def _compare_values(exp_str, act_str, compare_mode):
+    if compare_mode == 'exact_match':
+        exp_num = _try_number(exp_str)
+        act_num = _try_number(act_str)
+        passed = (exp_num == act_num)
+        msg = '' if passed else f"期望 {exp_str}, 实际 {act_str}"
+    elif compare_mode == 'contains':
+        passed = exp_str in str(act_str)
+        msg = '' if passed else f"期望包含 '{exp_str}', 实际 '{act_str}'"
+    elif compare_mode == 'set_match':
+        exp_set = set(exp_str.split('|')) if exp_str else set()
+        act_set = set(act_str.split('|')) if act_str else set()
+        passed = exp_set == act_set
+        msg = '' if passed else f"期望集合 {exp_set}, 实际集合 {act_set}"
+    else:
+        passed = exp_str == act_str
+        msg = '' if passed else f"期望 {exp_str}, 实际 {act_str}"
+    return passed, msg
+
+
+def _compare_dicts(expected_dict, actual_dict, compare_mode, skip_empty):
+    from runner import CompareDetail
+
+    details = []
+    all_keys = list(expected_dict.keys())
+    for key in all_keys:
+        exp_list = expected_dict.get(key, [])
+        act_list = actual_dict.get(key, [])
+
+        if not isinstance(exp_list, list):
+            exp_list = [exp_list]
+        if not isinstance(act_list, list):
+            act_list = [act_list]
+
+        max_len = max(len(exp_list), len(act_list))
+        for i in range(max_len):
+            exp = exp_list[i] if i < len(exp_list) else ''
+            act = act_list[i] if i < len(act_list) else ''
+
+            exp_str = str(exp).strip() if exp is not None else ''
+            act_str = str(act).strip() if act is not None else ''
+
+            if skip_empty and not exp_str:
+                details.append(CompareDetail(
+                    label=key, expected=exp, actual=act,
+                    passed=True, skipped=True, message='空值跳过'
+                ))
+                continue
+
+            passed, msg = _compare_values(exp_str, act_str, compare_mode)
+            details.append(CompareDetail(
+                label=key, expected=exp, actual=act,
+                passed=passed, skipped=False, message=msg
+            ))
 
     return details
 

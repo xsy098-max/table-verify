@@ -1,7 +1,7 @@
 import json
 import os
 
-VERSION = "2.5.2"
+VERSION = "2.6.0"
 
 AUTHOR = "奈叶摩尔"
 
@@ -170,6 +170,7 @@ BLOCK_PARAMS = {
     'flat_split': [
         {'key': 'input_var', 'label': '输入变量', 'type': 'variable'},
         {'key': 'delimiters', 'label': '分隔符(按顺序)', 'type': 'text'},
+        {'key': 'label_var', 'label': '标签变量(可选)', 'type': 'variable'},
         {'key': 'output_var', 'label': '保存为', 'type': 'text'},
     ],
     'lookup': [
