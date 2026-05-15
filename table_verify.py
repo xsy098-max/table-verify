@@ -761,6 +761,7 @@ class TableVerifyApp:
         self._last_sash_v = 400
         self._closing = False
         self._task_snapshot = None
+        self._detail_cache = {}
 
         self._build_menu()
         self._build_task_toolbar()
@@ -1600,12 +1601,13 @@ class TableVerifyApp:
                     status = '跳过' if d.skipped else ('通过' if d.passed else '失败')
                     exp_str = str(d.expected) if d.expected is not None else ''
                     act_str = str(d.actual) if d.actual is not None else ''
-                    self.result_tree.insert(group_id, tk.END, values=(
+                    iid = self.result_tree.insert(group_id, tk.END, values=(
                         d.label, d.item_name or '',
                         self._truncate_cell(exp_str),
                         self._truncate_cell(act_str),
                         status, self._truncate_cell(d.message),
                     ), tags=(tag,))
+                    self._detail_cache[iid] = d
 
         status = f"完成! 共{len(results)}个任务 通过:{total_p} 失败:{total_f} 跳过:{total_s}"
         if total_f > 0:
@@ -1617,6 +1619,7 @@ class TableVerifyApp:
     def _clear_results(self):
         for item in self.result_tree.get_children():
             self.result_tree.delete(item)
+        self._detail_cache = {}
 
     @staticmethod
     def _truncate_cell(s, max_len=200):
@@ -1636,20 +1639,37 @@ class TableVerifyApp:
         children = self.result_tree.get_children(item)
         if children:
             return
-        values = self.result_tree.item(item, 'values')
-        if not values:
+
+        d = self._detail_cache.get(item)
+        if not d:
             return
 
-        labels = ('标签', '道具', '期望值', '实际值', '结果', '说明')
+        import json
+        status = '跳过' if d.skipped else ('通过' if d.passed else '失败')
+
+        def fmt(val):
+            if isinstance(val, (list, dict)):
+                return json.dumps(val, ensure_ascii=False, indent=2)
+            return str(val) if val is not None else ''
+
+        entries = [
+            ('标签', d.label),
+            ('道具', d.item_name or ''),
+            ('期望值', fmt(d.expected)),
+            ('实际值', fmt(d.actual)),
+            ('结果', status),
+            ('说明', d.message or ''),
+        ]
+
         dlg = tk.Toplevel(self.root)
-        dlg.title("结果详情")
-        dlg.geometry("650x400")
+        dlg.title(f"结果详情 - {d.label}")
+        dlg.geometry("700x450")
         dlg.transient(self.root)
 
         frame = ttk.Frame(dlg, padding=10)
         frame.pack(fill=tk.BOTH, expand=True)
 
-        text = tk.Text(frame, wrap=tk.WORD, font=("Consolas", 10))
+        text = tk.Text(frame, wrap=tk.NONE, font=("Consolas", 10))
         vsb = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=text.yview)
         hsb = ttk.Scrollbar(frame, orient=tk.HORIZONTAL, command=text.xview)
         text.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
@@ -1657,7 +1677,7 @@ class TableVerifyApp:
         vsb.pack(side=tk.RIGHT, fill=tk.Y)
         text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-        for label, val in zip(labels, values):
+        for label, val in entries:
             text.insert(tk.END, f"【{label}】\n", 'header')
             text.insert(tk.END, f"{val}\n\n")
         text.tag_configure('header', font=('TkDefaultFont', 10, 'bold'))
