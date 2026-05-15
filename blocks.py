@@ -504,6 +504,35 @@ def _compare_dicts(expected_dict, actual_dict, compare_mode, skip_empty):
         if not isinstance(act_list, list):
             act_list = [act_list]
 
+        if compare_mode == 'set_match':
+            exp_set = set(str(v).strip() for v in exp_list if str(v).strip())
+            act_set = set(str(v).strip() for v in act_list if str(v).strip())
+            if skip_empty:
+                exp_set.discard('')
+
+            if exp_set == act_set:
+                details.append(CompareDetail(
+                    label=key, expected=sorted(exp_list, key=str),
+                    actual=sorted(act_list, key=str),
+                    passed=True, skipped=False,
+                    message=f'集合匹配通过 ({len(exp_set)}个)'
+                ))
+            else:
+                missing = exp_set - act_set
+                extra = act_set - exp_set
+                msg_parts = []
+                if missing:
+                    msg_parts.append(f"缺少: {sorted(missing)}")
+                if extra:
+                    msg_parts.append(f"多余: {sorted(extra)}")
+                details.append(CompareDetail(
+                    label=key, expected=sorted(exp_list, key=str),
+                    actual=sorted(act_list, key=str),
+                    passed=False, skipped=False,
+                    message='; '.join(msg_parts)
+                ))
+            continue
+
         max_len = max(len(exp_list), len(act_list))
         for i in range(max_len):
             exp = exp_list[i] if i < len(exp_list) else ''
