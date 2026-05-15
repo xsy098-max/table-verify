@@ -23,6 +23,8 @@ def _try_number(val):
     s = str(val).strip()
     if not s:
         return val
+    if '_' in s:
+        return val
     try:
         if '.' in s:
             return float(s)
@@ -151,6 +153,8 @@ def execute_extract_grouped(params, pool, tables):
     find_values_var = params.get('find_values_var', '')
     return_columns = params.get('return_columns', '')
     output_var = params.get('output_var', '')
+    skip_values_str = params.get('skip_values', '')
+    skip_values = set(v.strip() for v in skip_values_str.split(',') if v.strip())
 
     if not source or not find_column or not find_values_var or not return_columns or not output_var:
         raise BlockError('分组取值', "缺少必要参数")
@@ -173,8 +177,9 @@ def execute_extract_grouped(params, pool, tables):
         for row in rows:
             for col in ret_cols:
                 cell_val = row.get(col, '')
-                if cell_val and str(cell_val).strip():
-                    collected.append(str(cell_val).strip())
+                stripped = str(cell_val).strip()
+                if stripped and stripped not in skip_values:
+                    collected.append(stripped)
         seen = set()
         unique = []
         for item in collected:
