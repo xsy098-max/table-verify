@@ -13,6 +13,12 @@ from task_model import (
 from table_loader import TableLoader, TableData
 from runner import Runner, RunResult, GroupResult
 
+try:
+    import windnd
+    _HAS_WINDND = True
+except ImportError:
+    _HAS_WINDND = False
+
 
 class BatchRunDialog(tk.Toplevel):
     def __init__(self, parent, task_names):
@@ -999,6 +1005,9 @@ class TableVerifyApp:
         self.ds_listbox = tk.Listbox(parent, height=15, font=("Consolas", 10))
         self.ds_listbox.pack(fill=tk.BOTH, expand=True, padx=5, pady=3)
 
+        if _HAS_WINDND:
+            windnd.hook_dropfiles(self.ds_listbox, self._on_drop_files)
+
         self.ds_info = ttk.Label(parent, text="", foreground='gray', wraplength=260, justify=tk.LEFT)
         self.ds_info.pack(fill=tk.X, padx=5, pady=3)
         self.ds_listbox.bind('<<ListboxSelect>>', self._on_ds_select)
@@ -1249,6 +1258,9 @@ class TableVerifyApp:
             ext = os.path.splitext(ds.file_path)[1].upper().lstrip('.')
             sheet_info = f" / {ds.sheet_name}" if ds.sheet_name else ""
             self.ds_listbox.insert(tk.END, f"[{ext}{sheet_info}] {ds.name}")
+        if not self.current_task.data_sources:
+            drop_hint = "拖拽 Excel/CSV 文件到此处可添加数据源" if _HAS_WINDND else ""
+            self.ds_info.config(text=drop_hint)
 
     def _refresh_group_combo(self):
         names = [g.name for g in self.current_task.groups]
@@ -1266,6 +1278,37 @@ class TableVerifyApp:
             col_count = len(table.headers) if table else '?'
             row_count = len(table.raw_data) - table.header_row if table else '?'
             self.ds_info.config(text=f"路径: {ds.file_path}\n表头行: {ds.header_row}  列数: {col_count}  数据行: {row_count}")
+
+    def _on_drop_files(self, file_paths):
+        valid_exts = ('.xlsx', '.xlsm', '.csv')
+        valid = []
+        for p in file_paths:
+            if isinstance(p, bytes):
+                p = p.decode('gbk')
+            ext = os.path.splitext(p)[1].lower()
+            if ext in valid_exts:
+                valid.append(p)
+        if not valid:
+            messagebox.showinfo("提示", "仅支持 .xlsx / .xlsm / .csv 文件")
+            return
+        unsupported = len(file_paths) - len(valid)
+        if unsupported > 0:
+            messagebox.showinfo("提示", f"已忽略 {unsupported} 个不支持的文件（仅支持 .xlsx / .xlsm / .csv）")
+        for path in valid:
+            self._add_datasource_from_file(path)
+
+    def _add_datasource_from_file(self, file_path):
+        temp_ds = DataSource(name="", file_path=file_path)
+        dlg = DataSourceDialog(self.root, temp_ds)
+        self.root.wait_window(dlg)
+        if dlg.result:
+            if any(ds.name == dlg.result.name for ds in self.current_task.data_sources):
+                messagebox.showwarning("提示", f"数据源名称 '{dlg.result.name}' 已存在")
+                return
+            self.current_task.data_sources.append(dlg.result)
+            self._refresh_table_cache()
+            self._refresh_ds_list()
+            self._update_step_dropdowns()
 
     def _add_datasource(self):
         dlg = DataSourceDialog(self.root)
