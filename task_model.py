@@ -1,7 +1,7 @@
 import json
 import os
 
-VERSION = "2.9.0"
+VERSION = "2.9.1"
 
 AUTHOR = "奈叶摩尔"
 

@@ -1084,6 +1084,20 @@ class TableVerifyApp:
         else:
             self.steps_canvas.yview_scroll(int(-1 * (event.delta / 120)), 'units')
 
+    def _bind_step_scroll_lock(self):
+        def _consume_scroll(event):
+            self._on_steps_mousewheel(event)
+            return "break"
+
+        def _bind_recursive(widget):
+            widget.bind('<MouseWheel>', _consume_scroll)
+            widget.bind('<Button-4>', _consume_scroll)
+            widget.bind('<Button-5>', _consume_scroll)
+            for child in widget.winfo_children():
+                _bind_recursive(child)
+
+        _bind_recursive(self.steps_inner)
+
     def _build_results_panel(self, parent):
         cols = ('label', 'item_name', 'expected', 'actual', 'result', 'message')
         self.result_tree = ttk.Treeview(parent, columns=cols, show='headings', height=10)
@@ -1455,6 +1469,8 @@ class TableVerifyApp:
                 sw.configure(foreground='gray')
             sw.pack(fill=tk.X, padx=5, pady=2)
             self.step_widgets.append(sw)
+
+        self._bind_step_scroll_lock()
 
     def _move_step(self, idx, direction):
         group = self._get_current_group()
